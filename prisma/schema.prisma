@@ -1,0 +1,111 @@
+// Schema Prisma do MS Moradores (banco condominio_moradores)
+// Espelha fielmente Morador.sql — nomes de coluna preservados via @map
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImovelTipo {
+  COBERTURA
+  APARTAMENTO
+}
+
+enum MoradorImovelTipoRelacao {
+  PROPRIETARIO
+  INQUILINO
+  MORADOR
+  TEMPORADA
+}
+
+enum UsuarioPerfil {
+  SINDICO
+  MORADOR
+}
+
+model Bloco {
+  blocoId        Int     @id @default(autoincrement()) @map("bloco_id") @db.UnsignedInt
+  blocoNome      String  @unique(map: "uk_bloco_nome") @map("bloco_nome") @db.VarChar(50)
+  blocoDescricao String? @map("bloco_descricao") @db.VarChar(255)
+  blocoStatus    Int     @map("bloco_status")
+
+  imoveis Imovel[]
+
+  @@map("bloco")
+}
+
+model Imovel {
+  imovelId        Int        @id @default(autoincrement()) @map("imovel_id") @db.UnsignedInt
+  imovelNumero    String     @map("imovel_numero") @db.VarChar(20)
+  imovelAndar     Int?       @map("imovel_andar")
+  blocoId         Int        @map("bloco_id") @db.UnsignedInt
+  imovelAreaM2    Decimal?   @map("imovel_area_m2") @db.Decimal(8, 2)
+  imovelMatricula String?    @map("imovel_matricula") @db.VarChar(8)
+  imovelIptu      String?    @map("imovel_IPTU") @db.VarChar(24)
+  imovelTipo      ImovelTipo @map("imovel_tipo")
+  imovelGaragem   Int?       @map("imovel_garagem")
+  imovelStatus    Int        @map("imovel_status")
+
+  bloco          Bloco           @relation(fields: [blocoId], references: [blocoId], onDelete: Restrict, onUpdate: Cascade)
+  moradorImoveis MoradorImovel[]
+
+  @@unique([blocoId, imovelNumero], map: "uk_imovel_bloco_numero")
+  @@map("imovel")
+}
+
+model Morador {
+  moradorId                   Int       @id @default(autoincrement()) @map("morador_id") @db.UnsignedInt
+  moradorNome                 String    @map("morador_nome") @db.VarChar(300)
+  moradorCpf                  String    @unique(map: "uk_morador_cpf") @map("morador_cpf") @db.VarChar(11)
+  moradorEmail                String?   @unique(map: "uk_morador_email") @map("morador_email") @db.VarChar(150)
+  moradorTelefone             String?   @map("morador_telefone") @db.VarChar(20)
+  moradorDataNascimento       DateTime? @map("morador_data_nascimento") @db.Date
+  moradorDataCadastro         DateTime  @default(now()) @map("morador_data_cadastro")
+  moradorDeficienciaLocomocao Int?      @map("morador_deficiencia_locomocao")
+  moradorStatus                Int     @map("morador_status")
+
+  moradorImoveis MoradorImovel[]
+
+  @@map("morador")
+}
+
+model Usuario {
+  usuarioId           Int           @id @default(autoincrement()) @map("usuario_id") @db.UnsignedInt
+  usuarioLogin         String       @unique(map: "uk_usuario_login") @map("usuario_login") @db.VarChar(100)
+  usuarioSenhaHash     String        @map("usuario_senha_hash") @db.VarChar(255)
+  usuarioPerfil        UsuarioPerfil @default(MORADOR) @map("usuario_perfil")
+  usuarioDataCriacao   DateTime      @default(now()) @map("usuario_data_criacao")
+  usuarioUltimoAcesso  DateTime?     @map("usuario_ultimo_acesso")
+  usuarioStatus        Int           @map("usuario_status")
+
+  moradorImoveis MoradorImovel[]
+
+  @@map("usuario")
+}
+
+// Tabela associativa: também é onde fica o vínculo opcional com uma conta de acesso (usuario).
+// Importante: usuario NÃO tem FK direta para morador — a ligação é feita por aqui.
+model MoradorImovel {
+  moradorImovelId          Int                      @id @default(autoincrement()) @map("morador_imovel_id") @db.UnsignedInt
+  moradorId                 Int                      @map("morador_id") @db.UnsignedInt
+  imovelId                  Int                      @map("imovel_id") @db.UnsignedInt
+  moradorImovelTipoRelacao MoradorImovelTipoRelacao  @map("morador_imovel_tipo_relacao")
+  moradorImovelDataInicio  DateTime                  @map("morador_imovel_data_inicio") @db.Date
+  moradorImovelDataFim     DateTime?                 @map("morador_imovel_data_fim") @db.Date
+  moradorImovelStatus      Int                       @map("morador_imovel_status")
+  usuarioId                 Int?                     @map("usuario_id") @db.UnsignedInt
+
+  morador Morador  @relation(fields: [moradorId], references: [moradorId], onDelete: Cascade, onUpdate: Cascade)
+  imovel  Imovel   @relation(fields: [imovelId], references: [imovelId], onDelete: Restrict, onUpdate: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [usuarioId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([moradorId, imovelId, moradorImovelTipoRelacao], map: "uk_morador_imovel_relacao")
+  @@index([moradorId], map: "idx_morador_imovel_morador")
+  @@index([imovelId], map: "idx_morador_imovel_imovel")
+  @@index([usuarioId], map: "fk_morador_imovel_usuario_idx")
+  @@map("morador_imovel")
+}
