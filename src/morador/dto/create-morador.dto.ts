@@ -13,11 +13,11 @@ export class CreateMoradorDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(300)
-  moradorNome: string;
+  moradorNome!: string;
 
   @IsString()
   @Length(11, 11, { message: 'morador_cpf deve ter exatamente 11 dígitos (sem pontuação).' })
-  moradorCpf: string;
+  moradorCpf!: string;
 
   @IsOptional()
   @IsEmail()

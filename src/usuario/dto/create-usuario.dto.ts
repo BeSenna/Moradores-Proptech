@@ -5,12 +5,12 @@ export class CreateUsuarioDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  usuarioLogin: string;
+  usuarioLogin!: string;
 
   // senha em texto puro — o service faz o hash com bcrypt antes de persistir
   @IsString()
   @MinLength(8, { message: 'A senha deve ter pelo menos 8 caracteres.' })
-  senha: string;
+  senha!: string;
 
   @IsOptional()
   @IsEnum(UsuarioPerfil)
@@ -18,7 +18,7 @@ export class CreateUsuarioDto {
 
   @IsOptional()
   @IsIn([0, 1])
-  usuarioStatus?: number = 1;
+  usuarioStatus: number = 1;
 
   // Opcional: já vincula este usuário a uma relação morador_imovel existente na criação.
   @IsOptional()

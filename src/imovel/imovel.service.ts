@@ -13,11 +13,25 @@ export class ImovelService {
   ) {}
 
   async create(dto: CreateImovelDto) {
-    await this.garantirBlocoExiste(dto.blocoId);
+    // blocoId é obrigatório no DTO (@IsInt(), sem @IsOptional()) — a asserção
+    // só documenta pro compilador o que a validação já garante em tempo de execução.
+    await this.garantirBlocoExiste(dto.blocoId!);
 
     let imovel: Awaited<ReturnType<typeof this.prisma.imovel.create>>;
     try {
-      imovel = await this.prisma.imovel.create({ data: dto });
+      imovel = await this.prisma.imovel.create({
+        data: {
+          imovelNumero: dto.imovelNumero!,
+          imovelAndar: dto.imovelAndar,
+          blocoId: dto.blocoId!,
+          imovelAreaM2: dto.imovelAreaM2,
+          imovelMatricula: dto.imovelMatricula,
+          imovelIptu: dto.imovelIptu,
+          imovelTipo: dto.imovelTipo!,
+          imovelGaragem: dto.imovelGaragem,
+          imovelStatus: dto.imovelStatus,
+        },
+      });
     } catch (e) {
       this.tratarErroUnicidade(e);
     }

@@ -3,16 +3,16 @@ import { IsDateString, IsEnum, IsIn, IsInt, IsOptional } from 'class-validator';
 
 export class CreateMoradorImovelDto {
   @IsInt()
-  moradorId: number;
+  moradorId!: number;
 
   @IsInt()
-  imovelId: number;
+  imovelId!: number;
 
   @IsEnum(MoradorImovelTipoRelacao)
-  moradorImovelTipoRelacao: MoradorImovelTipoRelacao;
+  moradorImovelTipoRelacao!: MoradorImovelTipoRelacao;
 
   @IsDateString()
-  moradorImovelDataInicio: string;
+  moradorImovelDataInicio!: string;
 
   @IsOptional()
   @IsDateString()

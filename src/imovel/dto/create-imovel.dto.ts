@@ -15,14 +15,14 @@ export class CreateImovelDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  imovelNumero: string;
+  imovelNumero!: string;
 
   @IsOptional()
   @IsInt()
   imovelAndar?: number;
 
   @IsInt()
-  blocoId: number;
+  blocoId!: number;
 
   @IsOptional()
   @IsNumber()
@@ -40,7 +40,7 @@ export class CreateImovelDto {
   imovelIptu?: string;
 
   @IsEnum(ImovelTipo)
-  imovelTipo: ImovelTipo;
+  imovelTipo!: ImovelTipo;
 
   @IsOptional()
   @IsInt()
@@ -49,5 +49,5 @@ export class CreateImovelDto {
 
   @IsOptional()
   @IsIn([0, 1])
-  imovelStatus?: number = 1;
+  imovelStatus: number = 1;
 }

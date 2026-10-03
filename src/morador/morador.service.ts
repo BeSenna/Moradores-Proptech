@@ -15,7 +15,17 @@ export class MoradorService {
   async create(dto: CreateMoradorDto) {
     let morador: Awaited<ReturnType<typeof this.prisma.morador.create>>;
     try {
-      morador = await this.prisma.morador.create({ data: dto });
+      morador = await this.prisma.morador.create({
+        data: {
+          moradorNome: dto.moradorNome!,
+          moradorCpf: dto.moradorCpf!,
+          moradorEmail: dto.moradorEmail,
+          moradorTelefone: dto.moradorTelefone,
+          moradorDataNascimento: dto.moradorDataNascimento,
+          moradorDeficienciaLocomocao: dto.moradorDeficienciaLocomocao,
+          moradorStatus: dto.moradorStatus!,
+        },
+      });
     } catch (e) {
       this.tratarErroUnicidade(e);
     }

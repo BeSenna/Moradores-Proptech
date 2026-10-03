@@ -22,10 +22,10 @@ export class MoradorImovelService {
   ) {}
 
   async create(dto: CreateMoradorImovelDto) {
-    await this.garantirMoradorExiste(dto.moradorId);
-    await this.garantirImovelExiste(dto.imovelId);
+    await this.garantirMoradorExiste(dto.moradorId!);
+    await this.garantirImovelExiste(dto.imovelId!);
 
-    if (dto.moradorImovelDataFim && dto.moradorImovelDataFim < dto.moradorImovelDataInicio) {
+    if (dto.moradorImovelDataFim && dto.moradorImovelDataFim < dto.moradorImovelDataInicio!) {
       throw new ConflictException(
         'morador_imovel_data_fim não pode ser anterior à data_inicio.',
       );
@@ -33,7 +33,16 @@ export class MoradorImovelService {
 
     let vinculo: Awaited<ReturnType<typeof this.prisma.moradorImovel.create>>;
     try {
-      vinculo = await this.prisma.moradorImovel.create({ data: dto });
+      vinculo = await this.prisma.moradorImovel.create({
+        data: {
+          moradorId: dto.moradorId!,
+          imovelId: dto.imovelId!,
+          moradorImovelTipoRelacao: dto.moradorImovelTipoRelacao!,
+          moradorImovelDataInicio: dto.moradorImovelDataInicio!,
+          moradorImovelDataFim: dto.moradorImovelDataFim,
+          moradorImovelStatus: dto.moradorImovelStatus!,
+        },
+      });
     } catch (e) {
       this.tratarErroUnicidade(e);
     }

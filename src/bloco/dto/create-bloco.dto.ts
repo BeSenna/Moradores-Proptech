@@ -4,7 +4,7 @@ export class CreateBlocoDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
-  blocoNome: string;
+  blocoNome!: string;
 
   @IsOptional()
   @IsString()
@@ -14,5 +14,5 @@ export class CreateBlocoDto {
   // 1 = ativo, 0 = inativo — segue o padrão dos demais campos *_status do schema
   @IsOptional()
   @IsIn([0, 1])
-  blocoStatus?: number = 1;
+  blocoStatus: number = 1;
 }

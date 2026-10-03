@@ -22,13 +22,18 @@ export class UsuarioService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateUsuarioDto) {
-    const { senha, moradorImovelId, ...resto } = dto;
-    const usuarioSenhaHash = await bcrypt.hash(senha, SALT_ROUNDS);
+    const { senha, moradorImovelId, usuarioLogin, usuarioPerfil, usuarioStatus } = dto;
+    const usuarioSenhaHash = await bcrypt.hash(senha!, SALT_ROUNDS);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
         const usuario = await tx.usuario.create({
-          data: { ...resto, usuarioSenhaHash },
+          data: {
+            usuarioLogin: usuarioLogin!,
+            usuarioPerfil,
+            usuarioStatus: usuarioStatus!,
+            usuarioSenhaHash,
+          },
           select: SEM_SENHA,
         });
 

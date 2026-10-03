@@ -8,9 +8,15 @@ import { UpdateBlocoDto } from './dto/update-bloco.dto';
 export class BlocoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateBlocoDto) {
+    async create(dto: CreateBlocoDto) {
     try {
-      return await this.prisma.bloco.create({ data: dto });
+      return await this.prisma.bloco.create({
+        data: {
+          blocoNome: dto.blocoNome!,
+          blocoDescricao: dto.blocoDescricao,
+          blocoStatus: dto.blocoStatus,
+        },
+      });
     } catch (e) {
       this.tratarErroUnicidade(e, 'Já existe um bloco com esse nome.');
     }
