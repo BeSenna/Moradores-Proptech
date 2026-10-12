@@ -21,7 +21,9 @@ export class MoradorService {
           moradorCpf: dto.moradorCpf!,
           moradorEmail: dto.moradorEmail,
           moradorTelefone: dto.moradorTelefone,
-          moradorDataNascimento: dto.moradorDataNascimento,
+          moradorDataNascimento: dto.moradorDataNascimento
+          ? new Date(dto.moradorDataNascimento)
+          : undefined,
           moradorDeficienciaLocomocao: dto.moradorDeficienciaLocomocao,
           moradorStatus: dto.moradorStatus!,
         },
@@ -87,11 +89,19 @@ export class MoradorService {
   async update(moradorId: number, dto: UpdateMoradorDto) {
     await this.findOne(moradorId);
     try {
-      return await this.prisma.morador.update({ where: { moradorId }, data: dto });
-    } catch (e) {
-      this.tratarErroUnicidade(e);
-    }
+      return await this.prisma.morador.update({
+      where: { moradorId },
+      data: {
+        ...dto,
+        moradorDataNascimento: dto.moradorDataNascimento
+          ? new Date(dto.moradorDataNascimento)
+          : undefined,
+      },
+    });
+  } catch (e) {
+    this.tratarErroUnicidade(e);
   }
+}
 
   async remove(moradorId: number) {
     await this.findOne(moradorId);

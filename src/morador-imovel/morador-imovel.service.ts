@@ -38,8 +38,10 @@ export class MoradorImovelService {
           moradorId: dto.moradorId!,
           imovelId: dto.imovelId!,
           moradorImovelTipoRelacao: dto.moradorImovelTipoRelacao!,
-          moradorImovelDataInicio: dto.moradorImovelDataInicio!,
-          moradorImovelDataFim: dto.moradorImovelDataFim,
+          moradorImovelDataInicio: new Date(dto.moradorImovelDataInicio!),
+          moradorImovelDataFim: dto.moradorImovelDataFim
+            ? new Date(dto.moradorImovelDataFim)
+            : undefined,
           moradorImovelStatus: dto.moradorImovelStatus!,
         },
       });
@@ -154,7 +156,7 @@ export class MoradorImovelService {
     }
     const atualizado = await this.prisma.moradorImovel.update({
       where: { moradorImovelId },
-      data: { moradorImovelDataFim: dto.moradorImovelDataFim },
+      data: { moradorImovelDataFim: new Date(dto.moradorImovelDataFim) },
     });
     return this.comEstadoDerivado(atualizado);
   }
