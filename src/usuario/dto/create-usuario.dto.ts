@@ -14,11 +14,11 @@ export class CreateUsuarioDto {
 
   @IsOptional()
   @IsEnum(UsuarioPerfil)
-  usuarioPerfil?: UsuarioPerfil = UsuarioPerfil.MORADOR;
+  usuarioPerfil?:UsuarioPerfil;
 
   @IsOptional()
   @IsIn([0, 1])
-  usuarioStatus: number = 1;
+  usuarioStatus?: number;
 
   // Opcional: já vincula este usuário a uma relação morador_imovel existente na criação.
   @IsOptional()

@@ -40,5 +40,5 @@ export class CreateMoradorDto {
 
   @IsOptional()
   @IsIn([0, 1])
-  moradorStatus?: number = 1;
+  moradorStatus?: number;
 }

@@ -49,5 +49,5 @@ export class CreateImovelDto {
 
   @IsOptional()
   @IsIn([0, 1])
-  imovelStatus: number = 1;
+  imovelStatus?: number;
 }

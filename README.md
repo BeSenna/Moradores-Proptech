@@ -416,3 +416,13 @@ A publicação usa `emit()` (fire-and-forget) — se o RabbitMQ estiver indispon
   existem — hoje o morador comum só tem acesso de leitura às mesmas rotas do
   síndico, sem filtro automático pelos seus próprios dados.
 - Sem testes automatizados.
+
+## Admin
+
+login: admin
+senha: Admin@12345
+
+## Morador
+
+login: 
+senha:

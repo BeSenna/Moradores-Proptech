@@ -14,7 +14,7 @@ export class BlocoService {
         data: {
           blocoNome: dto.blocoNome!,
           blocoDescricao: dto.blocoDescricao,
-          blocoStatus: dto.blocoStatus,
+          blocoStatus: dto.blocoStatus ?? 1,
         },
       });
     } catch (e) {

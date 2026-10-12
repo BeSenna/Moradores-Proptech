@@ -30,8 +30,8 @@ export class UsuarioService {
         const usuario = await tx.usuario.create({
           data: {
             usuarioLogin: usuarioLogin!,
-            usuarioPerfil,
-            usuarioStatus: usuarioStatus!,
+            usuarioPerfil: usuarioPerfil ?? 'MORADOR',
+            usuarioStatus: usuarioStatus ?? 1,
             usuarioSenhaHash,
           },
           select: SEM_SENHA,

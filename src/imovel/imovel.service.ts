@@ -29,7 +29,7 @@ export class ImovelService {
           imovelIptu: dto.imovelIptu,
           imovelTipo: dto.imovelTipo!,
           imovelGaragem: dto.imovelGaragem,
-          imovelStatus: dto.imovelStatus,
+          imovelStatus: dto.imovelStatus ?? 1,
         },
       });
     } catch (e) {

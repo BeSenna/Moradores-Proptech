@@ -7,30 +7,30 @@ import {
   UpdateMoradorImovelDto,
   EncerrarMoradorImovelDto,
 } from './dto/update-morador-imovel.dto';
-
+ 
 type EstadoRelacao = 'ATIVO' | 'ENCERRANDO' | 'ENCERRADO';
-
+ 
 // Tipos de relação que habilitam cobrança — ver "Eventos RabbitMQ" na arquitetura
 // do MS Moradores: o evento só é relevante para o MS Financeiro nestes dois casos.
 const TIPOS_QUE_GERAM_COBRANCA: MoradorImovelTipoRelacao[] = ['PROPRIETARIO', 'INQUILINO'];
-
+ 
 @Injectable()
 export class MoradorImovelService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
   ) {}
-
+ 
   async create(dto: CreateMoradorImovelDto) {
     await this.garantirMoradorExiste(dto.moradorId!);
     await this.garantirImovelExiste(dto.imovelId!);
-
+ 
     if (dto.moradorImovelDataFim && dto.moradorImovelDataFim < dto.moradorImovelDataInicio!) {
       throw new ConflictException(
         'morador_imovel_data_fim não pode ser anterior à data_inicio.',
       );
     }
-
+ 
     let vinculo: Awaited<ReturnType<typeof this.prisma.moradorImovel.create>>;
     try {
       vinculo = await this.prisma.moradorImovel.create({
@@ -42,13 +42,13 @@ export class MoradorImovelService {
           moradorImovelDataFim: dto.moradorImovelDataFim
             ? new Date(dto.moradorImovelDataFim)
             : undefined,
-          moradorImovelStatus: dto.moradorImovelStatus!,
+          moradorImovelStatus: dto.moradorImovelStatus ?? 1,
         },
       });
     } catch (e) {
       this.tratarErroUnicidade(e);
     }
-
+ 
     // Evento documentado na arquitetura: disparado ao vincular um morador como
     // PROPRIETARIO/INQUILINO; consumido pelo MS Financeiro para habilitar novas cobranças.
     if (TIPOS_QUE_GERAM_COBRANCA.includes(vinculo.moradorImovelTipoRelacao)) {
@@ -60,10 +60,10 @@ export class MoradorImovelService {
         dataInicio: vinculo.moradorImovelDataInicio,
       });
     }
-
+ 
     return this.comEstadoDerivado(vinculo);
   }
-
+ 
   async findAll(params: {
     page?: number;
     pageSize?: number;
@@ -74,7 +74,7 @@ export class MoradorImovelService {
   }) {
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? params.pageSize : 20;
-
+ 
     const where: Prisma.MoradorImovelWhereInput = {
       ...(params.moradorId !== undefined ? { moradorId: params.moradorId } : {}),
       ...(params.imovelId !== undefined ? { imovelId: params.imovelId } : {}),
@@ -83,7 +83,7 @@ export class MoradorImovelService {
         : {}),
       ...(params.status !== undefined ? { moradorImovelStatus: params.status } : {}),
     };
-
+ 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.moradorImovel.findMany({
         where,
@@ -97,7 +97,7 @@ export class MoradorImovelService {
       }),
       this.prisma.moradorImovel.count({ where }),
     ]);
-
+ 
     return {
       data: data.map((v) => this.comEstadoDerivado(v)),
       total,
@@ -106,7 +106,7 @@ export class MoradorImovelService {
       totalPages: Math.ceil(total / pageSize),
     };
   }
-
+ 
   async findOne(moradorImovelId: number) {
     const vinculo = await this.prisma.moradorImovel.findUnique({
       where: { moradorImovelId },
@@ -116,12 +116,12 @@ export class MoradorImovelService {
       throw new NotFoundException(`Relação #${moradorImovelId} não encontrada.`);
     return this.comEstadoDerivado(vinculo);
   }
-
+ 
   async update(moradorImovelId: number, dto: UpdateMoradorImovelDto) {
     const atual = await this.findOne(moradorImovelId);
     if (dto.moradorId !== undefined) await this.garantirMoradorExiste(dto.moradorId);
     if (dto.imovelId !== undefined) await this.garantirImovelExiste(dto.imovelId);
-
+ 
     // mesma validação de create()/encerrar(): garante que PATCH não contorne a regra
     // de que data_fim nunca pode ficar antes de data_inicio
     if (dto.moradorImovelDataFim) {
@@ -133,18 +133,26 @@ export class MoradorImovelService {
         );
       }
     }
-
+ 
     try {
       const vinculo = await this.prisma.moradorImovel.update({
         where: { moradorImovelId },
-        data: dto,
+        data: {
+          ...dto,
+          moradorImovelDataInicio: dto.moradorImovelDataInicio
+            ? new Date(dto.moradorImovelDataInicio)
+            : undefined,
+          moradorImovelDataFim: dto.moradorImovelDataFim
+            ? new Date(dto.moradorImovelDataFim)
+            : undefined,
+        },
       });
       return this.comEstadoDerivado(vinculo);
     } catch (e) {
       this.tratarErroUnicidade(e);
     }
   }
-
+ 
   // Define a data de fim do vínculo. O estado (ATIVO / ENCERRANDO / ENCERRADO)
   // é sempre derivado comparando essa data com hoje — não existe uma coluna própria para isso.
   async encerrar(moradorImovelId: number, dto: EncerrarMoradorImovelDto) {
@@ -160,7 +168,7 @@ export class MoradorImovelService {
     });
     return this.comEstadoDerivado(atualizado);
   }
-
+ 
   async remove(moradorImovelId: number) {
     await this.findOne(moradorImovelId);
     return this.prisma.moradorImovel.update({
@@ -168,7 +176,7 @@ export class MoradorImovelService {
       data: { moradorImovelStatus: 0 },
     });
   }
-
+ 
   private comEstadoDerivado<T extends { moradorImovelDataFim: Date | null }>(
     vinculo: T,
   ): T & { estado: EstadoRelacao } {
@@ -180,17 +188,17 @@ export class MoradorImovelService {
     }
     return { ...vinculo, estado };
   }
-
+ 
   private async garantirMoradorExiste(moradorId: number) {
     const morador = await this.prisma.morador.findUnique({ where: { moradorId } });
     if (!morador) throw new NotFoundException(`Morador #${moradorId} não encontrado.`);
   }
-
+ 
   private async garantirImovelExiste(imovelId: number) {
     const imovel = await this.prisma.imovel.findUnique({ where: { imovelId } });
     if (!imovel) throw new NotFoundException(`Imóvel #${imovelId} não encontrado.`);
   }
-
+ 
   private tratarErroUnicidade(e: unknown): never {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
       throw new ConflictException(

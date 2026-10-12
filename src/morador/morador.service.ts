@@ -25,7 +25,7 @@ export class MoradorService {
           ? new Date(dto.moradorDataNascimento)
           : undefined,
           moradorDeficienciaLocomocao: dto.moradorDeficienciaLocomocao,
-          moradorStatus: dto.moradorStatus!,
+          moradorStatus: dto.moradorStatus ?? 1,
         },
       });
     } catch (e) {
