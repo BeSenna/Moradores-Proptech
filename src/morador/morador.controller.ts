@@ -43,7 +43,7 @@ export class MoradorController {
     });
   }
 
-  // Usado pelos outros microsserviços (Serviços) para validação síncrona do morador_id.
+  
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.moradorService.findOne(id);

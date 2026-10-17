@@ -46,7 +46,7 @@ export class ImovelController {
     });
   }
 
-  // Usado pelos outros microsserviços (Financeiro, Serviços) para validação síncrona do imovel_id.
+  
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.imovelService.findOne(id);

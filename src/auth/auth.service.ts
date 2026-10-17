@@ -35,9 +35,7 @@ export class AuthService {
       throw new UnauthorizedException('Login ou senha inválidos.');
     }
 
-    // Diferente de um link direto usuario -> morador, o morador_id é resolvido
-    // consultando qual(is) linha(s) de morador_imovel referenciam este usuario_id
-    // (ver seção "Autenticação e Autorização" da arquitetura do sistema).
+    
     const moradorId = await this.resolverMoradorId(usuario.usuarioId);
 
     await this.prisma.usuario.update({

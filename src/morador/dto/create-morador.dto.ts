@@ -33,7 +33,7 @@ export class CreateMoradorDto {
   @IsDateString()
   moradorDataNascimento?: string;
 
-  // 1 = possui, 0 = não possui — mantém o mesmo padrão dos demais inteiros do schema
+  
   @IsOptional()
   @IsIn([0, 1])
   moradorDeficienciaLocomocao?: number;

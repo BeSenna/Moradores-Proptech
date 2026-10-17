@@ -3,10 +3,7 @@ import { MoradorImovelTipoRelacao, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { CreateMoradorImovelDto } from './dto/create-morador-imovel.dto';
-import {
-  UpdateMoradorImovelDto,
-  EncerrarMoradorImovelDto,
-} from './dto/update-morador-imovel.dto';
+import { UpdateMoradorImovelDto, EncerrarMoradorImovelDto,} from './dto/update-morador-imovel.dto';
  
 type EstadoRelacao = 'ATIVO' | 'ENCERRANDO' | 'ENCERRADO';
  
@@ -153,8 +150,6 @@ export class MoradorImovelService {
     }
   }
  
-  // Define a data de fim do vínculo. O estado (ATIVO / ENCERRANDO / ENCERRADO)
-  // é sempre derivado comparando essa data com hoje — não existe uma coluna própria para isso.
   async encerrar(moradorImovelId: number, dto: EncerrarMoradorImovelDto) {
     const vinculo = await this.findOne(moradorImovelId);
     if (dto.moradorImovelDataFim < vinculo.moradorImovelDataInicio.toISOString().slice(0, 10)) {

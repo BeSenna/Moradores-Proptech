@@ -32,8 +32,7 @@ export class MoradorService {
       this.tratarErroUnicidade(e);
     }
 
-    // Evento documentado na arquitetura do MS Moradores: consumido pelo MS Serviços
-    // para manter um cache local do nome do morador.
+  
     this.events.publish('morador.cadastrado', {
       moradorId: morador.moradorId,
       moradorNome: morador.moradorNome,

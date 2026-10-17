@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { setupSwagger } from './swagger/swagger.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -19,9 +20,14 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  // Documentação interativa (Swagger) em /api/docs
+  setupSwagger(app);
+
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`MS Moradores rodando em http://localhost:${port}/api`);
+  // eslint-disable-next-line no-console
+  console.log(`Swagger em http://localhost:${port}/api/docs`);
 }
 bootstrap();
