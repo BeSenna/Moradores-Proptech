@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MoradorImovelTipoRelacao } from '@prisma/client';
+import { MoradorImovelTipoRelacao } from '../generated/prisma/client';
 import { MoradorImovelService } from './morador-imovel.service';
 import { CreateMoradorImovelDto } from './dto/create-morador-imovel.dto';
 import {

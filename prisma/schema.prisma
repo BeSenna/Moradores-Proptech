@@ -2,12 +2,14 @@
 // Espelha fielmente Morador.sql — nomes de coluna preservados via @map
 
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  importFileExtension = ""
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 enum ImovelTipo {

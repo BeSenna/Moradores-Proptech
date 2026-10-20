@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { MoradorImovelTipoRelacao, Prisma } from '@prisma/client';
+import { MoradorImovelTipoRelacao, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { CreateMoradorImovelDto } from './dto/create-morador-imovel.dto';

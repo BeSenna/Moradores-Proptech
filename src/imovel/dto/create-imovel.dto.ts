@@ -1,4 +1,4 @@
-import { ImovelTipo } from '@prisma/client';
+import { ImovelTipo } from '../../generated/prisma/client';
 import {
   IsEnum,
   IsIn,

@@ -41,7 +41,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      DATABASE_URL: mysql://root:root@db:3306/condominio_moradores
+      DATABASE_URL: mysql://root:root@db:3306/condominio_moradores?allowPublicKeyRetrieval=true
       PORT: 3001
       # use um segredo forte fora de demonstrações (pode definir JWT_SECRET no seu .env)
       JWT_SECRET: ${JWT_SECRET:-troque-por-um-segredo-forte-e-unico}

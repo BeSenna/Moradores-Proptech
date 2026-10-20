@@ -28,3 +28,4 @@ Thumbs.db
 
 # cobertura de testes
 /coverage
+src/generated

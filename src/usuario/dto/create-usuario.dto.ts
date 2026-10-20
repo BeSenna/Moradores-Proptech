@@ -1,4 +1,4 @@
-import { UsuarioPerfil } from '@prisma/client';
+import { UsuarioPerfil } from '../../generated/prisma/client';
 import { IsEnum, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateUsuarioDto {

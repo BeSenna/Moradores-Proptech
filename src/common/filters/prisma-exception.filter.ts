@@ -4,7 +4,7 @@ import {
   ExceptionFilter,
   HttpStatus,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import { Response } from 'express';
 
 // Pega erros do Prisma que escaparem dos try/catch dos services (ex.: P2025 - registro não encontrado

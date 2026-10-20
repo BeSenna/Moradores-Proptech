@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../src/generated/prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';

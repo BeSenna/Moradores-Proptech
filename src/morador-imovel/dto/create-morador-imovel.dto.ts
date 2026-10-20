@@ -1,4 +1,4 @@
-import { MoradorImovelTipoRelacao } from '@prisma/client';
+import { MoradorImovelTipoRelacao } from '../../generated/prisma/client';
 import { IsDateString, IsEnum, IsIn, IsInt, IsOptional } from 'class-validator';
 
 export class CreateMoradorImovelDto {

@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ImovelTipo } from '@prisma/client';
+import { ImovelTipo } from '../generated/prisma/client';
 import { ImovelService } from './imovel.service';
 import { CreateImovelDto } from './dto/create-imovel.dto';
 import { UpdateImovelDto } from './dto/update-imovel.dto';

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ImovelTipo, Prisma } from '@prisma/client';
+import { ImovelTipo, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { CreateImovelDto } from './dto/create-imovel.dto';

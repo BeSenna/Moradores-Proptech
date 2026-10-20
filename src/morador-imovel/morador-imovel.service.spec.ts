@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import { createPrismaMock } from '../../test/helpers/prisma-mock';
 import { MoradorImovelService } from './morador-imovel.service';
 
