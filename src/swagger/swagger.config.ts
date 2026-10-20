@@ -454,7 +454,7 @@ const paths: Record<string, any> = {
       public: true,
       requestBody: body('LoginRequest', { usuarioLogin: 'admin', senha: 'Admin@12345' }),
       ok: [
-        200,
+        201,
         'Autenticado',
         ref('LoginResponse'),
         {

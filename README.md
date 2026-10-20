@@ -133,7 +133,11 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
 ### Guards
 
 - **`JwtAuthGuard`** — valida a assinatura do token (`JwtStrategy`) e injeta o
-  payload decodificado em `req.user`.
+  payload decodificado em `req.user`. A cada requisição o `JwtStrategy` também
+  consulta o `usuario` no banco: se a conta foi desativada (`usuario_status = 0`)
+  ou removida, o token **já emitido deixa de valer na hora** (401), sem esperar a
+  expiração. O perfil usado pelo `RolesGuard` também vem do banco, então rebaixar
+  um síndico tem efeito imediato.
 - **`RolesGuard`** + **`@Roles('SINDICO' | 'MORADOR')`** — compara
   `req.user.usuarioPerfil` com os perfis exigidos pela rota. Sem `@Roles(...)`,
   qualquer perfil autenticado passa.
@@ -156,7 +160,11 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
 ```
 ms-moradores/
 ├── prisma/
-│   └── schema.prisma          # schema do banco condominio_moradores
+│   ├── schema.prisma          # schema do banco condominio_moradores
+│   └── migrations/            # migrations (criação das tabelas)
+├── database/
+│   └── Morador.sql            # mesmo DDL das migrations, para rodar direto no MySQL
+├── test/                      # testes e2e e helpers (mock do Prisma)
 ├── src/
 │   ├── main.ts                 # bootstrap, ValidationPipe, prefixo /api
 │   ├── app.module.ts           # módulo raiz, amarra todos os módulos
@@ -196,7 +204,8 @@ ms-moradores/
 ### Pré-requisitos
 
 - Node.js 18+
-- MySQL com o banco `condominio_moradores` já criado (rode `Morador.sql` antes)
+- MySQL (o banco `condominio_moradores` pode ser criado vazio; as tabelas vêm das
+  migrations — ver "Banco de dados" abaixo)
 - RabbitMQ (opcional para rodar o CRUD — só é necessário para os eventos; se não
   estiver disponível, a publicação apenas falha silenciosamente em log, sem
   derrubar a API)
@@ -210,19 +219,46 @@ cp .env.example .env
 # edite o .env: DATABASE_URL, JWT_SECRET, RABBITMQ_URL
 
 npx prisma generate
+npx prisma migrate deploy   # cria as tabelas
 npm run start:dev
 ```
 
-A API sobe em `http://localhost:3001/api`.
+A API sobe em `http://localhost:3001/api` (Swagger em `/api/docs`).
 
-### Criando o primeiro usuário síndico
+### Banco de dados
 
-Como criar um `usuario` exige já estar autenticado como síndico, para o primeiro
-acesso há duas opções:
+O schema é versionado em `prisma/migrations/` (migration `20261019000000_init`, que
+cria `bloco`, `imovel`, `morador`, `usuario` e `morador_imovel`).
 
-1. Inserir manualmente uma linha em `usuario` com a senha já hasheada em bcrypt, ou
-2. Comentar temporariamente os guards do `UsuarioController`, criar o primeiro
-   usuário via `POST /api/usuario`, e desfazer o comentário em seguida.
+| Situação | Como preparar |
+|---|---|
+| Banco novo/vazio (recomendado) | `npx prisma migrate deploy` |
+| Sem Node na máquina do banco | `mysql -u root -p < database/Morador.sql` (cria o banco e as tabelas; é o mesmo DDL da migration) |
+| Banco **já existente** criado por outro script (`P3005: database schema is not empty`) | `npx prisma migrate resolve --applied 20261019000000_init` para marcar a migration como aplicada |
+| Docker | automático (`docker compose up --build`) |
+
+Ao alterar o `schema.prisma`, gere uma nova migration em desenvolvimento com
+`npx prisma migrate dev --name <descricao>` e versione a pasta criada.
+
+### Síndico inicial (automático)
+
+Criar um `usuario` exige já estar logado como síndico. Para resolver isso, ao subir,
+a API cria sozinha o primeiro síndico **se não existir nenhum síndico ativo**, usando
+`ADMIN_LOGIN` (padrão `admin`) e `ADMIN_SENHA` (mínimo 8 caracteres) do `.env`. Sem
+`ADMIN_SENHA`, nada é criado e um aviso aparece no log. Depois do primeiro start a
+rotina não faz mais nada. Troque a senha em `PATCH /api/usuario/:id/senha`.
+
+### Testes automatizados
+
+```bash
+npm test            # unitários (src/**/*.spec.ts) + e2e (test/*.e2e-spec.ts)
+npm run test:cov    # com cobertura
+```
+
+Rodam sem MySQL e sem RabbitMQ (Prisma e eventos são mockados) e cobrem login, guards
+e permissões por perfil, revogação de token ao desativar usuário, validações dos DTOs,
+CRUD de moradores (inclusive PATCH parcial sem reaplicar valores padrão), estado
+derivado das relações, eventos publicados e o JSON do Swagger.
 
 ## Executando com Docker
 
@@ -233,7 +269,7 @@ docker compose up --build
 ```
 
 - API: http://localhost:3001/api — Swagger: http://localhost:3001/api/docs
-- Na primeira execução as tabelas são criadas (`prisma db push`) e é criado o síndico `admin` / `Admin@12345`
+- Na primeira execução as migrations são aplicadas (`prisma migrate deploy`) e a API cria o síndico `admin` / `Admin@12345`
   (troque com `ADMIN_LOGIN` / `ADMIN_SENHA`; o segredo do JWT com `JWT_SECRET`, num `.env` ao lado do compose).
 - MySQL exposto em `localhost:3307` (usuário `root`, senha `root`); RabbitMQ em http://localhost:15672 (guest/guest).
 - Parar: `docker compose down` — apagar também o banco: `docker compose down -v`.
@@ -247,6 +283,8 @@ docker compose up --build
 | `JWT_SECRET` | Chave de assinatura do JWT — **deve ser a mesma** nos outros microsserviços, para que todos validem o mesmo token |
 | `JWT_EXPIRES_IN` | Validade do token (padrão `8h`) |
 | `RABBITMQ_URL` | URL de conexão do broker de eventos |
+| `ADMIN_LOGIN` | Login do síndico inicial criado automaticamente (padrão `admin`) |
+| `ADMIN_SENHA` | Senha do síndico inicial (mín. 8 caracteres). Sem ela, o síndico inicial não é criado |
 
 ## Referência da API
 
@@ -429,7 +467,10 @@ A publicação usa `emit()` (fire-and-forget) — se o RabbitMQ estiver indispon
   usando o `moradorId` do próprio token em vez de regra por perfil) ainda não
   existem — hoje o morador comum só tem acesso de leitura às mesmas rotas do
   síndico, sem filtro automático pelos seus próprios dados.
-- Sem testes automatizados.
+- Os testes automatizados não usam um MySQL real (Prisma mockado). Um próximo passo
+  é uma suíte de integração contra um MySQL descartável (ex.: Testcontainers).
+- Trocar a senha de um usuário (`PATCH /usuario/:id/senha`) ainda não invalida os
+  tokens já emitidos dele — apenas desativar a conta faz isso.
 
 ## Admin
 

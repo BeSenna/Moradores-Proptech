@@ -23,5 +23,5 @@ RUN npm run build
 ENV NODE_ENV=production
 EXPOSE 3001
 
-# aplica o schema no banco, cria o síndico inicial e sobe a API
+# aplica as migrations no banco e sobe a API (que cria o síndico inicial, se preciso)
 CMD ["sh", "docker/entrypoint.sh"]
