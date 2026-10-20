@@ -224,6 +224,20 @@ acesso há duas opções:
 2. Comentar temporariamente os guards do `UsuarioController`, criar o primeiro
    usuário via `POST /api/usuario`, e desfazer o comentário em seguida.
 
+## Executando com Docker
+
+Requer apenas o Docker (com Compose). Sobe a API, o MySQL e o RabbitMQ juntos:
+
+```bash
+docker compose up --build
+```
+
+- API: http://localhost:3001/api — Swagger: http://localhost:3001/api/docs
+- Na primeira execução as tabelas são criadas (`prisma db push`) e é criado o síndico `admin` / `Admin@12345`
+  (troque com `ADMIN_LOGIN` / `ADMIN_SENHA`; o segredo do JWT com `JWT_SECRET`, num `.env` ao lado do compose).
+- MySQL exposto em `localhost:3307` (usuário `root`, senha `root`); RabbitMQ em http://localhost:15672 (guest/guest).
+- Parar: `docker compose down` — apagar também o banco: `docker compose down -v`.
+
 ## Variáveis de ambiente
 
 | Variável | Descrição |
