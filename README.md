@@ -33,13 +33,14 @@ têm bancos próprios e consultam este serviço via HTTP para validar `imovel_id
 | Camada | Tecnologia |
 |---|---|
 | Framework | [NestJS](https://nestjs.com/) 10 |
-| ORM | [Prisma](https://www.prisma.io/) 5 |
+| ORM | [Prisma](https://www.prisma.io/) 7.10 (generator `prisma-client`, driver adapter `@prisma/adapter-mariadb`) |
 | Banco de dados | MySQL (`condominio_moradores`) |
 | Autenticação | JWT (`@nestjs/jwt` + `passport-jwt`), esquema Bearer |
 | Hash de senha | `bcryptjs` |
 | Validação | `class-validator` / `class-transformer` |
 | Mensageria | RabbitMQ (`@nestjs/microservices`, transporte RMQ) |
 | Linguagem | TypeScript 5 |
+| Segredos / variáveis | [Infisical](https://infisical.com/) (ambiente `dev`), com `.env` como alternativa |
 
 ## Arquitetura
 
@@ -163,6 +164,7 @@ ms-moradores/
 ├── prisma/
 │   ├── schema.prisma          # schema do banco condominio_moradores
 │   └── migrations/            # migrations (criação das tabelas)
+├── prisma.config.ts           # config do Prisma 7 (schema, migrations, DATABASE_URL)
 ├── database/
 │   └── Morador.sql            # mesmo DDL das migrations, para rodar direto no MySQL
 ├── test/                      # testes e2e e helpers (mock do Prisma)
@@ -170,7 +172,8 @@ ms-moradores/
 │   ├── main.ts                 # bootstrap, ValidationPipe, prefixo /api
 │   ├── app.module.ts           # módulo raiz, amarra todos os módulos
 │   │
-│   ├── prisma/                 # PrismaService (client) — módulo @Global
+│   ├── generated/prisma/       # Prisma Client GERADO (não versionado: rode `npx prisma generate`)
+│   ├── prisma/                 # PrismaService (client + adapter MariaDB) — módulo @Global
 │   ├── events/                 # EventsService — publica no RabbitMQ
 │   ├── common/filters/         # filtro global de exceções do Prisma
 │   │
@@ -195,6 +198,8 @@ ms-moradores/
 │           └── dto/create-<nome>.dto.ts, update-<nome>.dto.ts
 │
 ├── .env.example
+├── .infisical.json            # vínculo com o projeto no Infisical
+├── Dockerfile / docker-compose.yml / docker/entrypoint.sh
 ├── package.json
 ├── tsconfig.json
 └── nest-cli.json
@@ -206,7 +211,7 @@ Passo a passo completo para quem **nunca rodou o projeto**. Escolha um dos dois 
 
 | | Caminho A — Docker | Caminho B — Manual |
 |---|---|---|
-| Instala | Git + Docker | Git + Node.js + MySQL (+ RabbitMQ opcional) |
+| Instala | Git + Docker | Git + Node.js + MySQL (+ RabbitMQ e Infisical opcionais) |
 | Dificuldade | Baixa (um comando) | Média |
 | Quando usar | Demonstração, avaliação, "só quero ver rodando" | Desenvolvimento com `start:dev` e recarga automática |
 
@@ -283,7 +288,7 @@ docker compose down -v     # para e APAGA o banco (recomeça do zero)
 | Programa | Versão | Windows | macOS | Ubuntu/Debian |
 |---|---|---|---|---|
 | **Git** | qualquer | [git-scm.com](https://git-scm.com/download/win) | `xcode-select --install` | `sudo apt install -y git` |
-| **Node.js + npm** | **24** (mesma versão da imagem Docker `node:24-slim`) | [nodejs.org](https://nodejs.org/en/download) (instalador da versão 24.x) | `brew install node@24` | via [nvm](https://github.com/nvm-sh/nvm): `nvm install 24` |
+| **Node.js + npm** | **22.12+ ou 24** (exigência do Prisma 7; o Docker usa `node:24-slim`) | [nodejs.org](https://nodejs.org/en/download) (instalador LTS 22.x ou 24.x) | `brew install node@24` | via [nvm](https://github.com/nvm-sh/nvm): `nvm install 24` |
 | **MySQL** | **8.0** | [MySQL Installer](https://dev.mysql.com/downloads/installer/) (servidor + Workbench) | `brew install mysql && brew services start mysql` | `sudo apt install -y mysql-server && sudo systemctl enable --now mysql` |
 | **RabbitMQ** *(opcional)* | 3.x | [rabbitmq.com/install-windows](https://www.rabbitmq.com/docs/install-windows) | `brew install rabbitmq && brew services start rabbitmq` | `sudo apt install -y rabbitmq-server` |
 
@@ -295,7 +300,7 @@ docker compose down -v     # para e APAGA o banco (recomeça do zero)
 Confira as versões:
 
 ```bash
-node -v      # v24.x
+node -v      # v22.12 ou superior (ou v24.x)
 npm -v
 git --version
 mysql --version
@@ -307,10 +312,14 @@ Entre no MySQL (`mysql -u root -p`, ou o Workbench) e rode:
 
 ```sql
 CREATE DATABASE condominio_moradores CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'proptech'@'localhost' IDENTIFIED BY 'troque-esta-senha';
-GRANT ALL PRIVILEGES ON condominio_moradores.* TO 'proptech'@'localhost';
+CREATE USER 'proptech'@'127.0.0.1' IDENTIFIED BY 'troque-esta-senha';
+GRANT ALL PRIVILEGES ON condominio_moradores.* TO 'proptech'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
+
+> **Use `127.0.0.1` e não `localhost`.** No MySQL, `'usuario'@'localhost'` e `'usuario'@'127.0.0.1'`
+> são contas diferentes, e a API conecta pelo endereço IP. Se o usuário foi criado só para
+> `localhost`, o login pode falhar.
 
 > As **tabelas não precisam ser criadas à mão**: o passo 5 as cria. (Alternativa sem Node na máquina
 > do banco: `mysql -u root -p < database/Morador.sql`.)
@@ -332,14 +341,20 @@ cp .env.example .env          # Windows (cmd/PowerShell): copy .env.example .env
 Edite o `.env` e ajuste, no mínimo:
 
 ```env
-DATABASE_URL="mysql://proptech:troque-esta-senha@localhost:3306/condominio_moradores"
+DATABASE_URL="mysql://proptech:troque-esta-senha@127.0.0.1:3306/condominio_moradores?allowPublicKeyRetrieval=true"
 JWT_SECRET="um-segredo-longo-e-aleatorio"
 ADMIN_LOGIN="admin"
 ADMIN_SENHA="uma-senha-forte-com-8-ou-mais-caracteres"
 ```
 
-> Se a senha do MySQL tiver caracteres especiais (`@ : / # ?`), codifique-os na URL
-> (ex.: `@` vira `%40`). `ADMIN_SENHA` precisa ter **8+ caracteres**, senão o síndico inicial não é criado.
+> - Host em **`127.0.0.1`** (não `localhost`) e o parâmetro **`?allowPublicKeyRetrieval=true`**: o MySQL 8
+>   usa a autenticação `caching_sha2_password`, e sem esse parâmetro a primeira conexão pode falhar
+>   (erro `pool timeout` ou `Access denied`).
+> - Se a senha do MySQL tiver caracteres especiais (`@ : / # ?`), codifique-os na URL
+>   (ex.: `@` vira `%40`).
+> - `ADMIN_SENHA` precisa ter **8+ caracteres**, senão o síndico inicial não é criado.
+> - O `.env` é lido pelo `prisma.config.ts` (comandos `prisma ...`) e pelo `PrismaService` (API).
+>   Se o Infisical estiver em uso (passo 6), o valor que ele injeta **vence** o do `.env`.
 
 **5. Gere o client do Prisma e crie as tabelas**
 
@@ -348,11 +363,35 @@ npx prisma generate
 npx prisma migrate deploy
 ```
 
+> No Prisma 7 o client é **gerado dentro do projeto** (`src/generated/prisma`), e essa pasta **não vai
+> para o Git**. Por isso o `npx prisma generate` é obrigatório em toda máquina nova e sempre que o
+> `prisma/schema.prisma` mudar. Sem ele, o build falha com `Cannot find module '../generated/prisma/client'`.
+
 **6. Inicie a API**
 
+O projeto usa o **Infisical** para entregar as variáveis de ambiente em desenvolvimento. O script
+`npm run start:dev` executa `infisical run --env=dev -- nest start --watch`. Há dois jeitos de rodar:
+
+*Opção 1 — com Infisical (padrão da equipe).* Precisa do acesso ao projeto do grupo no Infisical:
+
 ```bash
-npm run start:dev      # desenvolvimento, recarrega ao salvar
-# ou, para produção:
+npm install -g @infisical/cli     # ou: brew install infisical/get-cli/infisical
+infisical login                    # abre o navegador; use a conta convidada para o projeto
+npm run start:dev                  # as variáveis do ambiente "dev" são injetadas
+```
+
+O arquivo `.infisical.json` (já versionado) aponta o projeto. **As variáveis do Infisical têm
+prioridade sobre o `.env`**: se `DATABASE_URL` estiver errada lá, a API usa a errada.
+
+*Opção 2 — sem Infisical (só com o `.env`).* Para quem não tem acesso ao Infisical:
+
+```bash
+npx nest start --watch             # desenvolvimento, recarrega ao salvar
+```
+
+*Produção (qualquer opção):*
+
+```bash
 npm run build && npm run start:prod
 ```
 
@@ -362,7 +401,7 @@ API cria o síndico inicial com `ADMIN_LOGIN` / `ADMIN_SENHA`.
 **7. Confirme que funcionou**
 
 ```bash
-npm test                                       # 64 testes, não precisam de MySQL
+npm test                                       # 64 testes, não precisam de MySQL (mas precisam do `prisma generate` do passo 5)
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"usuarioLogin":"admin","senha":"SUA_ADMIN_SENHA"}'
@@ -385,13 +424,19 @@ No repositório do frontend (React): `npm install` e `npm run dev` (<http://loca
 | Docker Desktop não inicia no Windows | Habilite a virtualização na BIOS e o WSL 2 (`wsl --install` no PowerShell como administrador) e reinicie |
 | No Windows o container da API reinicia com erro `set: Illegal option -` ou `no such file` em `entrypoint.sh` | Final de linha CRLF no script. O repositório traz um `.gitattributes` que força LF; se o clone já foi feito sem ele: `git rm --cached -r . && git reset --hard` (ou clone de novo) |
 | `P3005: The database schema is not empty` | Banco antigo criado por outro script. No Docker: `docker compose down -v` e suba de novo. Manual: `npx prisma migrate resolve --applied 20261019000000_init` |
-| `P1001: Can't reach database server` | MySQL desligado ou `DATABASE_URL` errada (host/porta/usuário/senha). No Docker a API usa o host `db` automaticamente |
-| `Access denied for user` | Usuário/senha do `DATABASE_URL` não conferem com o criado no passo 2 |
+| `P1001: Can't reach database server` | MySQL desligado ou `DATABASE_URL` errada (host/porta/usuário/senha). No Docker a API usa o host `db` automaticamente; se persistir em loop, rode `docker compose down` e suba de novo |
+| `Access denied for user` (sem relação com o Infisical) | Usuário/senha do `DATABASE_URL` não conferem com o criado no passo 2 |
 | `Environment variable not found: DATABASE_URL` | Falta o arquivo `.env` na raiz do projeto |
-| `Cannot find module '.prisma/client'` / erros de tipo do Prisma | Rode `npx prisma generate` depois do `npm install` |
+| `Cannot find module '../generated/prisma/client'` / erros de tipo do Prisma | O client não foi gerado. Rode `npx prisma generate` depois do `npm install` (a pasta `src/generated` não é versionada) |
+| `Cannot find module './internal/class.ts'` ao rodar o build compilado | Client gerado com imports `.ts`. Confira no `schema.prisma`: `importFileExtension = ""` (com **i minúsculo**) e rode `npx prisma generate` de novo |
+| `pool timeout` ou `Can't reach database` só com `npm run start:dev` (mas funciona com `npx nest start`) | O Infisical está injetando uma `DATABASE_URL` diferente da do `.env`. Corrija o segredo no ambiente `dev` do Infisical (e **salve**) |
+| `Access denied` / `Unknown authentication plugin` / `pool timeout` com MySQL 8 | Use `127.0.0.1` no host e `?allowPublicKeyRetrieval=true` na `DATABASE_URL`; confira que a conta existe para `'127.0.0.1'` |
+| `infisical: command not found` ou `You are not logged in` | Instale o CLI (`npm install -g @infisical/cli`) e rode `infisical login`; ou use `npx nest start --watch` com o `.env` |
+| `Environment variable not found: DATABASE_URL` ao rodar `npx prisma ...` | O `prisma.config.ts` lê o `.env` da raiz; crie-o (passo 4) ou rode via `infisical run --env=dev -- npx prisma ...` |
+| No Docker: `address already in use` na porta 3001 | A API local está rodando. Pare-a (Ctrl+C) e rode `docker compose down` antes de `docker compose up --build` |
 | Login do síndico retorna 401 | O síndico só é criado se `ADMIN_SENHA` tem 8+ caracteres e **ainda não existe** síndico ativo. Veja o log da API; para recomeçar do zero no Docker, `docker compose down -v` |
 | Aviso de RabbitMQ no log | Normal sem o broker; a API continua funcionando (só os eventos não são publicados) |
-| `npm install` falha com versão antiga do Node | Use Node 24 (`node -v`; com nvm: `nvm install 24 && nvm use 24`) |
+| `npm install` ou `prisma generate` falha por versão do Node | O Prisma 7 exige Node 22.12+ (ou 24). Confira `node -v`; com nvm: `nvm install 24 && nvm use 24` |
 
 ---
 
@@ -399,7 +444,7 @@ No repositório do frontend (React): `npm install` e `npm run dev` (<http://loca
 
 ### Pré-requisitos
 
-- Node.js 24
+- Node.js 22.12+ (ou 24)
 - MySQL (o banco `condominio_moradores` pode ser criado vazio; as tabelas vêm das
   migrations — ver "Banco de dados" abaixo)
 - RabbitMQ (opcional para rodar o CRUD — só é necessário para os eventos; se não
@@ -414,9 +459,9 @@ npm install
 cp .env.example .env
 # edite o .env: DATABASE_URL, JWT_SECRET, RABBITMQ_URL
 
-npx prisma generate
+npx prisma generate         # obrigatório (client em src/generated, não versionado)
 npx prisma migrate deploy   # cria as tabelas
-npm run start:dev
+npm run start:dev           # com Infisical; sem ele: npx nest start --watch
 ```
 
 A API sobe em `http://localhost:3001/api` (Swagger em `/api/docs`).
@@ -434,7 +479,8 @@ cria `bloco`, `imovel`, `morador`, `usuario` e `morador_imovel`).
 | Docker | automático (`docker compose up --build`) |
 
 Ao alterar o `schema.prisma`, gere uma nova migration em desenvolvimento com
-`npx prisma migrate dev --name <descricao>` e versione a pasta criada.
+`npx prisma migrate dev --name <descricao>`, rode `npx prisma generate` e versione a pasta de migration criada.
+A URL do banco **não fica no schema**: no Prisma 7 ela é lida em `prisma.config.ts` (`DATABASE_URL`) e, na API, passada ao adapter em `src/prisma/prisma.service.ts`.
 
 ### Síndico inicial (automático)
 
@@ -468,13 +514,15 @@ docker compose up --build
 - Na primeira execução as migrations são aplicadas (`prisma migrate deploy`) e a API cria o síndico `admin` / `Admin@12345`
   (troque com `ADMIN_LOGIN` / `ADMIN_SENHA`; o segredo do JWT com `JWT_SECRET`, num `.env` ao lado do compose).
 - MySQL exposto em `localhost:3307` (usuário `root`, senha `root`); RabbitMQ em http://localhost:15672 (guest/guest).
+- No build da imagem o `prisma generate` roda automaticamente (Dockerfile); não precisa de Infisical nem de `.env` no Docker.
+- Se a API local estiver rodando na porta 3001, pare-a antes (`address already in use`).
 - Parar: `docker compose down` — apagar também o banco: `docker compose down -v`.
 
 ## Variáveis de ambiente
 
 | Variável | Descrição |
 |---|---|
-| `DATABASE_URL` | String de conexão MySQL (`mysql://usuario:senha@host:3306/condominio_moradores`) |
+| `DATABASE_URL` | String de conexão MySQL (`mysql://usuario:senha@127.0.0.1:3306/condominio_moradores?allowPublicKeyRetrieval=true`) |
 | `PORT` | Porta HTTP do serviço (padrão `3001`) |
 | `JWT_SECRET` | Chave de assinatura do JWT — **deve ser a mesma** nos outros microsserviços, para que todos validem o mesmo token |
 | `JWT_EXPIRES_IN` | Validade do token (padrão `8h`) |
@@ -655,10 +703,10 @@ A publicação usa `emit()` (fire-and-forget) — se o RabbitMQ estiver indispon
 
 ## Limitações conhecidas e próximos passos
 
-- Não foi possível rodar `prisma generate` nem compilar de ponta a ponta no
-  ambiente em que este projeto foi gerado (bloqueio de rede ao CDN de binários do
-  Prisma). O código foi revisado manualmente; deve compilar normalmente assim que
-  `npx prisma generate` rodar com acesso à internet.
+- A migração para o Prisma 7 foi validada com build, 64 testes unitários/e2e (Prisma
+  mockado), execução local com Infisical e execução via Docker Compose.
+- A API imprime `DATABASE_URL`, `API_KEY` e `JWT_SECRET` no log ao iniciar (`src/app.module.ts`).
+  Útil em desenvolvimento, mas **deve ser removido antes de qualquer entrega/produção**.
 - Endpoints equivalentes para o morador comum (ex.: `/me/imovel`, `/me/relacoes`,
   usando o `moradorId` do próprio token em vez de regra por perfil) ainda não
   existem — hoje o morador comum só tem acesso de leitura às mesmas rotas do
