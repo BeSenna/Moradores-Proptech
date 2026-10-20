@@ -1,5 +1,5 @@
 # Imagem do MS Moradores (NestJS + Prisma)
-FROM node:20-slim
+FROM node:24-slim
 
 # O Prisma precisa do OpenSSL para falar com o MySQL
 RUN apt-get update -y \
