@@ -9,7 +9,7 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: condominio_moradores
     ports:
-      - "3307:3306" # 3307 no seu PC, para não colidir com um MySQL local na 3306
+      - "127.0.0.1:3307:3306" # 3307 no seu PC, para não colidir com um MySQL local na 3306
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -22,8 +22,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
