@@ -15,8 +15,8 @@ RUN npm ci
 # 2) Prisma Client gerado a partir do schema (o Prisma 7 lê a config em prisma.config.ts)
 COPY prisma ./prisma
 COPY prisma.config.ts tsconfig.json ./
-# o prisma.config.ts exige DATABASE_URL só para carregar; o generate não conecta no banco
-RUN DATABASE_URL="mysql://u:p@localhost:3306/db" npx prisma generate
+# o generate só lê o schema e não conecta no banco, então não precisa de DATABASE_URL
+RUN npx prisma generate
 
 # 3) código + build
 COPY . .
