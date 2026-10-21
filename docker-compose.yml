@@ -1,24 +1,14 @@
-# Sobe tudo com:  docker compose up --build
+# Sobe a API + RabbitMQ. O MySQL 5.7 NÃO roda aqui: é o servidor da faculdade (edumysql.acesso.rj.senac.br).
+#
+# As variáveis (DATABASE_URL, JWT_SECRET, ADMIN_SENHA...) vêm do ambiente e NUNCA ficam escritas neste arquivo.
+# Com Infisical (padrão da equipe):
+#   npx infisical run --env=dev -- docker compose up --build
+# Sem Infisical: crie um .env ao lado deste arquivo com as mesmas variáveis e rode  docker compose up --build
+#
 # API:      http://localhost:7522/condominio/morador        Swagger: http://localhost:7522/condominio/morador/docs
 # RabbitMQ: http://localhost:15672 (guest / guest)
 # O schema é criado por `prisma migrate deploy` e o síndico inicial pela própria API (ADMIN_LOGIN/ADMIN_SENHA).
 services:
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: condominio_moradores
-    ports:
-      - "127.0.0.1:3307:3306" # 3307 no seu PC, para não colidir com um MySQL local na 3306
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
-
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -34,22 +24,16 @@ services:
   api:
     build: .
     depends_on:
-      db:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     ports:
       - "7522:7522"
     environment:
-      DATABASE_URL: mysql://root:root@db:3306/condominio_moradores?allowPublicKeyRetrieval=true
+      DATABASE_URL: ${DATABASE_URL:?defina DATABASE_URL (Infisical ou .env)}
       PORT: 7522
-      # use um segredo forte fora de demonstrações (pode definir JWT_SECRET no seu .env)
-      JWT_SECRET: ${JWT_SECRET:-troque-por-um-segredo-forte-e-unico}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (Infisical ou .env)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
-      ADMIN_SENHA: ${ADMIN_SENHA:-Admin@12345}
+      ADMIN_SENHA: ${ADMIN_SENHA:-}
     restart: unless-stopped
-
-volumes:
-  mysql_data:
