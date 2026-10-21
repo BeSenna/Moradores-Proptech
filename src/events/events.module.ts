@@ -13,6 +13,7 @@ import { EventsService } from './events.service';
             urls: [process.env.RABBITMQ_URL ?? 'amqp://localhost:5672'],
             queue: 'ms_moradores_events',
             queueOptions: { durable: true },
+            persistent: true,
           },
         }),
       },

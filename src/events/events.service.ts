@@ -25,7 +25,7 @@ export class EventsService implements OnModuleDestroy {
     this.client.emit(pattern, payload).subscribe({
       error: (err) =>
         this.logger.warn(
-          `Falha ao publicar evento "${pattern}" no RabbitMQ: ${err?.message ?? err}`,
+         `Falha ao publicar evento "${pattern}" no RabbitMQ: ${err instanceof Error ? err.message : JSON.stringify(err)}`,
         ),
     });
   }
