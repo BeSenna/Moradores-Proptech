@@ -372,11 +372,12 @@ npx prisma migrate deploy
 O projeto usa o **Infisical** para entregar as variáveis de ambiente em desenvolvimento. O script
 `npm run start:dev` executa `infisical run --env=dev -- nest start --watch`. Há dois jeitos de rodar:
 
-*Opção 1 — com Infisical (padrão da equipe).* Precisa do acesso ao projeto do grupo no Infisical:
+*Opção 1 — com Infisical (padrão da equipe).* Precisa do acesso ao projeto do grupo no Infisical.
+O CLI (`@infisical/cli`) já vem nas dependências de desenvolvimento, então o `npm install` do passo 3
+basta; não é preciso instalá-lo globalmente:
 
 ```bash
-npm install -g @infisical/cli     # ou: brew install infisical/get-cli/infisical
-infisical login                    # abre o navegador; use a conta convidada para o projeto
+npx infisical login                # abre o navegador; use a conta convidada para o projeto
 npm run start:dev                  # as variáveis do ambiente "dev" são injetadas
 ```
 
@@ -431,7 +432,7 @@ No repositório do frontend (React): `npm install` e `npm run dev` (<http://loca
 | `Cannot find module './internal/class.ts'` ao rodar o build compilado | Client gerado com imports `.ts`. Confira no `schema.prisma`: `importFileExtension = ""` (com **i minúsculo**) e rode `npx prisma generate` de novo |
 | `pool timeout` ou `Can't reach database` só com `npm run start:dev` (mas funciona com `npx nest start`) | O Infisical está injetando uma `DATABASE_URL` diferente da do `.env`. Corrija o segredo no ambiente `dev` do Infisical (e **salve**) |
 | `Access denied` / `Unknown authentication plugin` / `pool timeout` com MySQL 8 | Use `127.0.0.1` no host e `?allowPublicKeyRetrieval=true` na `DATABASE_URL`; confira que a conta existe para `'127.0.0.1'` |
-| `infisical: command not found` ou `You are not logged in` | Instale o CLI (`npm install -g @infisical/cli`) e rode `infisical login`; ou use `npx nest start --watch` com o `.env` |
+| `You are not logged in` ao rodar `npm run start:dev` | Rode `npx infisical login` (o CLI vem no `npm install`); ou use `npx nest start --watch` com o `.env` |
 | `Environment variable not found: DATABASE_URL` ao rodar `npx prisma ...` | O `prisma.config.ts` lê o `.env` da raiz; crie-o (passo 4) ou rode via `infisical run --env=dev -- npx prisma ...` |
 | No Docker: `address already in use` na porta 3001 | A API local está rodando. Pare-a (Ctrl+C) e rode `docker compose down` antes de `docker compose up --build` |
 | Login do síndico retorna 401 | O síndico só é criado se `ADMIN_SENHA` tem 8+ caracteres e **ainda não existe** síndico ativo. Veja o log da API; para recomeçar do zero no Docker, `docker compose down -v` |

@@ -217,7 +217,7 @@ describe('MS Moradores (e2e)', () => {
         new Prisma.PrismaClientKnownRequestError('dup', {
           code: 'P2002',
           clientVersion: 'test',
-          meta: { target: ['uk_morador_cpf'] },
+          meta: { driverAdapterError: { cause: { constraint: { index: 'uk_morador_cpf' } } } },
         }),
       );
 

@@ -53,13 +53,19 @@ describe('MoradorService', () => {
         new Prisma.PrismaClientKnownRequestError('dup', {
           code: 'P2002',
           clientVersion: 'test',
-          meta: { target: ['uk_morador_cpf'] },
+          meta: { driverAdapterError: { cause: { constraint: { index: 'uk_morador_cpf' } } } },
         }),
       );
 
       await expect(
         service.create({ moradorNome: 'Ana', moradorCpf: '11122233344' } as any),
       ).rejects.toBeInstanceOf(ConflictException);
+
+      // a mensagem do 409 deve citar o campo duplicado
+      await expect(
+        service.create({ moradorNome: 'Ana', moradorCpf: '11122233344' } as any),
+      ).rejects.toThrow('CPF');
+
       expect(events.publish).not.toHaveBeenCalled();
     });
   });

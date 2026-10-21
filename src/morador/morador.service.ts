@@ -112,7 +112,8 @@ export class MoradorService {
 
   private tratarErroUnicidade(e: unknown): never {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-      const campo = (e.meta?.target as string[])?.join(', ') ?? 'campo único';
+      const indice: string = (e.meta as any)?.driverAdapterError?.cause?.constraint?.index ?? '';
+      const campo = indice.includes('cpf') ? 'CPF' : indice.includes('email') ? 'e-mail' : 'campo único';
       throw new ConflictException(`Já existe um morador com esse(a) ${campo}.`);
     }
     throw e;
