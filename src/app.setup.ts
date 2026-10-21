@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { PREFIXO_API } from './app.constants';
 import { setupSwagger } from './swagger/swagger.config';
 
 // Configuração compartilhada entre a aplicação real (main.ts) e os testes e2e,
@@ -16,8 +17,8 @@ export function configureApp(app: INestApplication) {
     }),
   );
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix(PREFIXO_API);
 
-  // Documentação interativa (Swagger) em /api/docs
+  // Documentação interativa (Swagger) em /condominio/morador/docs
   setupSwagger(app);
 }

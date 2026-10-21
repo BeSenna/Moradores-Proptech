@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
+import { PREFIXO_API } from '../app.constants';
 
 /**
  * Documentação OpenAPI (Swagger) do MS Moradores.
@@ -9,8 +10,8 @@ import { OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
  * (rotas, paginação e permissões). Fica toda neste arquivo para não misturar documentação
  * com a lógica dos controllers. Ao criar/alterar uma rota, atualize o trecho correspondente.
  *
- * UI:   GET /api/docs
- * JSON: GET /api/docs-json
+ * UI:   GET /condominio/morador/docs
+ * JSON: GET /condominio/morador/docs-json
  */
 
 // ───────────────────────── helpers ─────────────────────────
@@ -841,13 +842,13 @@ const document: OpenAPIObject = {
       '3. Execute qualquer rota. Rotas com 🔒 exigem token; as marcadas como *SINDICO* exigem também esse perfil (senão: 403).',
       '',
       '**Convenções**',
-      '- Prefixo `/api` em todas as rotas.',
+      '- Prefixo `/condominio/morador` em todas as rotas.',
       '- Exclusão é *lógica*: `DELETE` muda o `*_status` para 0 e o registro continua existindo.',
       '- Listagens aceitam `page` e `pageSize` e respondem `{ data, total, page, pageSize, totalPages }`.',
       '- Erros seguem `{ statusCode, message, error }`.',
     ].join('\n'),
   },
-  servers: [{ url: '/api', description: 'MS Moradores (prefixo /api)' }],
+  servers: [{ url: `/${PREFIXO_API}`, description: 'MS Moradores' }],
   tags: [
     { name: 'Autenticação', description: 'Login e verificação do token JWT' },
     { name: 'Bloco', description: 'Blocos (torres) do condomínio' },
@@ -866,7 +867,7 @@ const document: OpenAPIObject = {
 } as any;
 
 export function setupSwagger(app: INestApplication) {
-  SwaggerModule.setup('api/docs', app, document, {
+  SwaggerModule.setup(`${PREFIXO_API}/docs`, app, document, {
     customSiteTitle: 'MS Moradores — API',
     swaggerOptions: { persistAuthorization: true },
   });

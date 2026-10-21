@@ -11,7 +11,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { createPrismaMock } from './helpers/prisma-mock';
 
 // Testes de ponta a ponta (HTTP): sobem o AppModule inteiro com a mesma configuração de produção
-// (ValidationPipe, prefixo /api, guards, Swagger), trocando só o banco e o RabbitMQ por mocks.
+// (ValidationPipe, prefixo /condominio/morador, guards, Swagger), trocando só o banco e o RabbitMQ por mocks.
 describe('MS Moradores (e2e)', () => {
   let app: INestApplication;
   let prisma: any;
@@ -67,16 +67,16 @@ describe('MS Moradores (e2e)', () => {
 
   describe('autenticação', () => {
     it('rota protegida sem token → 401', async () => {
-      await request(app.getHttpServer()).get('/api/morador').expect(401);
+      await request(app.getHttpServer()).get('/condominio/morador/morador').expect(401);
     });
 
     it('token malformado → 401', async () => {
-      await request(app.getHttpServer()).get('/api/morador').set(bearer('lixo')).expect(401);
+      await request(app.getHttpServer()).get('/condominio/morador/morador').set(bearer('lixo')).expect(401);
     });
 
     it('login correto devolve accessToken e dados do usuário', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/auth/login')
+        .post('/condominio/morador/auth/login')
         .send({ usuarioLogin: 'admin', senha: 'Admin@12345' })
         .expect(201);
 
@@ -87,11 +87,11 @@ describe('MS Moradores (e2e)', () => {
 
     it('o token do login funciona em /auth/me', async () => {
       const login = await request(app.getHttpServer())
-        .post('/api/auth/login')
+        .post('/condominio/morador/auth/login')
         .send({ usuarioLogin: 'admin', senha: 'Admin@12345' });
 
       const me = await request(app.getHttpServer())
-        .get('/api/auth/me')
+        .get('/condominio/morador/auth/me')
         .set(bearer(login.body.accessToken))
         .expect(200);
 
@@ -100,39 +100,39 @@ describe('MS Moradores (e2e)', () => {
 
     it('senha errada → 401', async () => {
       await request(app.getHttpServer())
-        .post('/api/auth/login')
+        .post('/condominio/morador/auth/login')
         .send({ usuarioLogin: 'admin', senha: 'errada' })
         .expect(401);
     });
 
     it('corpo do login incompleto → 400', async () => {
-      await request(app.getHttpServer()).post('/api/auth/login').send({ usuarioLogin: 'admin' }).expect(400);
+      await request(app.getHttpServer()).post('/condominio/morador/auth/login').send({ usuarioLogin: 'admin' }).expect(400);
     });
   });
 
   describe('desativação de usuário bloqueia tokens já emitidos', () => {
     it('token válido deixa de funcionar assim que usuario_status vira 0', async () => {
       const token = tokenDe(SINDICO, 'SINDICO');
-      await request(app.getHttpServer()).get('/api/auth/me').set(bearer(token)).expect(200);
+      await request(app.getHttpServer()).get('/condominio/morador/auth/me').set(bearer(token)).expect(200);
 
       usuarios.get(SINDICO).usuarioStatus = 0; // o síndico revoga o acesso
 
-      await request(app.getHttpServer()).get('/api/auth/me').set(bearer(token)).expect(401);
-      await request(app.getHttpServer()).get('/api/morador').set(bearer(token)).expect(401);
+      await request(app.getHttpServer()).get('/condominio/morador/auth/me').set(bearer(token)).expect(401);
+      await request(app.getHttpServer()).get('/condominio/morador/morador').set(bearer(token)).expect(401);
     });
 
     it('usuário apagado do banco também perde o acesso', async () => {
       const token = tokenDe(MORADOR, 'MORADOR');
       usuarios.delete(MORADOR);
 
-      await request(app.getHttpServer()).get('/api/auth/me').set(bearer(token)).expect(401);
+      await request(app.getHttpServer()).get('/condominio/morador/auth/me').set(bearer(token)).expect(401);
     });
 
     it('usuário desativado não consegue mais fazer login', async () => {
       usuarios.get(MORADOR).usuarioStatus = 0;
 
       await request(app.getHttpServer())
-        .post('/api/auth/login')
+        .post('/condominio/morador/auth/login')
         .send({ usuarioLogin: 'ana', senha: 'senha1234' })
         .expect(401);
     });
@@ -142,7 +142,7 @@ describe('MS Moradores (e2e)', () => {
       usuarios.get(SINDICO).usuarioPerfil = 'MORADOR';
 
       await request(app.getHttpServer())
-        .post('/api/morador')
+        .post('/condominio/morador/morador')
         .set(bearer(token))
         .send({ moradorNome: 'Ana', moradorCpf: '11122233344' })
         .expect(403);
@@ -155,7 +155,7 @@ describe('MS Moradores (e2e)', () => {
       prisma.morador.count.mockResolvedValue(0);
 
       const res = await request(app.getHttpServer())
-        .get('/api/morador')
+        .get('/condominio/morador/morador')
         .set(bearer(tokenDe(MORADOR, 'MORADOR')))
         .expect(200);
 
@@ -163,11 +163,11 @@ describe('MS Moradores (e2e)', () => {
     });
 
     it.each([
-      ['POST', '/api/morador', { moradorNome: 'Ana', moradorCpf: '11122233344' }],
-      ['PATCH', '/api/morador/1', { moradorNome: 'Ana' }],
-      ['DELETE', '/api/morador/1', undefined],
-      ['POST', '/api/bloco', { blocoNome: 'A' }],
-      ['GET', '/api/usuario', undefined],
+      ['POST', '/condominio/morador/morador', { moradorNome: 'Ana', moradorCpf: '11122233344' }],
+      ['PATCH', '/condominio/morador/morador/1', { moradorNome: 'Ana' }],
+      ['DELETE', '/condominio/morador/morador/1', undefined],
+      ['POST', '/condominio/morador/bloco', { blocoNome: 'A' }],
+      ['GET', '/condominio/morador/usuario', undefined],
     ])('MORADOR em %s %s → 403', async (metodo, url, corpo) => {
       const req = (request(app.getHttpServer()) as any)[metodo.toLowerCase()](url).set(
         bearer(tokenDe(MORADOR, 'MORADOR')),
@@ -183,7 +183,7 @@ describe('MS Moradores (e2e)', () => {
       prisma.morador.create.mockResolvedValue({ moradorId: 7, moradorNome: 'Ana', moradorStatus: 1 });
 
       const res = await request(app.getHttpServer())
-        .post('/api/morador')
+        .post('/condominio/morador/morador')
         .set(sindico())
         .send({ moradorNome: 'Ana', moradorCpf: '11122233344', moradorEmail: 'ana@email.com' })
         .expect(201);
@@ -195,7 +195,7 @@ describe('MS Moradores (e2e)', () => {
 
     it('POST com CPF inválido → 400', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/morador')
+        .post('/condominio/morador/morador')
         .set(sindico())
         .send({ moradorNome: 'Ana', moradorCpf: '123' })
         .expect(400);
@@ -206,7 +206,7 @@ describe('MS Moradores (e2e)', () => {
 
     it('POST com campo desconhecido → 400 (forbidNonWhitelisted)', async () => {
       await request(app.getHttpServer())
-        .post('/api/morador')
+        .post('/condominio/morador/morador')
         .set(sindico())
         .send({ moradorNome: 'Ana', moradorCpf: '11122233344', admin: true })
         .expect(400);
@@ -222,7 +222,7 @@ describe('MS Moradores (e2e)', () => {
       );
 
       await request(app.getHttpServer())
-        .post('/api/morador')
+        .post('/condominio/morador/morador')
         .set(sindico())
         .send({ moradorNome: 'Ana', moradorCpf: '11122233344' })
         .expect(409);
@@ -233,7 +233,7 @@ describe('MS Moradores (e2e)', () => {
       prisma.morador.update.mockResolvedValue({ moradorId: 7, moradorTelefone: '(21) 98888-7777' });
 
       await request(app.getHttpServer())
-        .patch('/api/morador/7')
+        .patch('/condominio/morador/morador/7')
         .set(sindico())
         .send({ moradorTelefone: '(21) 98888-7777' })
         .expect(200);
@@ -245,18 +245,18 @@ describe('MS Moradores (e2e)', () => {
     it('GET /morador/:id inexistente → 404', async () => {
       prisma.morador.findUnique.mockResolvedValue(null);
 
-      await request(app.getHttpServer()).get('/api/morador/99').set(sindico()).expect(404);
+      await request(app.getHttpServer()).get('/condominio/morador/morador/99').set(sindico()).expect(404);
     });
 
     it('GET /morador/abc (id inválido) → 400', async () => {
-      await request(app.getHttpServer()).get('/api/morador/abc').set(sindico()).expect(400);
+      await request(app.getHttpServer()).get('/condominio/morador/morador/abc').set(sindico()).expect(400);
     });
 
     it('DELETE faz exclusão lógica (status 0)', async () => {
       prisma.morador.findUnique.mockResolvedValue({ moradorId: 7 });
       prisma.morador.update.mockResolvedValue({ moradorId: 7, moradorStatus: 0 });
 
-      const res = await request(app.getHttpServer()).delete('/api/morador/7').set(sindico()).expect(200);
+      const res = await request(app.getHttpServer()).delete('/condominio/morador/morador/7').set(sindico()).expect(200);
 
       expect(res.body.moradorStatus).toBe(0);
       expect(prisma.morador.update).toHaveBeenCalledWith({
@@ -283,7 +283,7 @@ describe('MS Moradores (e2e)', () => {
       prisma.moradorImovel.count.mockResolvedValue(2);
 
       const res = await request(app.getHttpServer())
-        .get('/api/morador-imovel?tipoRelacao=PROPRIETARIO')
+        .get('/condominio/morador/morador-imovel?tipoRelacao=PROPRIETARIO')
         .set(bearer(tokenDe(SINDICO, 'SINDICO')))
         .expect(200);
 
@@ -296,9 +296,9 @@ describe('MS Moradores (e2e)', () => {
 
   describe('Swagger', () => {
     it('serve a UI e o JSON com as 29 operações', async () => {
-      await request(app.getHttpServer()).get('/api/docs').expect(200);
+      await request(app.getHttpServer()).get('/condominio/morador/docs').expect(200);
 
-      const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);
+      const res = await request(app.getHttpServer()).get('/condominio/morador/docs-json').expect(200);
       const ops = Object.values(res.body.paths).reduce(
         (soma: number, rota: any) => soma + Object.keys(rota).length,
         0,
