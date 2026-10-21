@@ -1,5 +1,5 @@
 # Sobe tudo com:  docker compose up --build
-# API:      http://localhost:3001/api        Swagger: http://localhost:3001/api/docs
+# API:      http://localhost:7522/condominio/morador        Swagger: http://localhost:7522/condominio/morador/docs
 # RabbitMQ: http://localhost:15672 (guest / guest)
 # O schema é criado por `prisma migrate deploy` e o síndico inicial pela própria API (ADMIN_LOGIN/ADMIN_SENHA).
 services:
@@ -39,10 +39,10 @@ services:
       rabbitmq:
         condition: service_healthy
     ports:
-      - "3001:3001"
+      - "7522:7522"
     environment:
       DATABASE_URL: mysql://root:root@db:3306/condominio_moradores?allowPublicKeyRetrieval=true
-      PORT: 3001
+      PORT: 7522
       # use um segredo forte fora de demonstrações (pode definir JWT_SECRET no seu .env)
       JWT_SECRET: ${JWT_SECRET:-troque-por-um-segredo-forte-e-unico}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}

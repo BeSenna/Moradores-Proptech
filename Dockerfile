@@ -23,7 +23,7 @@ COPY . .
 RUN npm run build
 
 ENV NODE_ENV=production
-EXPOSE 3001
+EXPOSE 7522
 
 # aplica as migrations no banco e sobe a API (que cria o síndico inicial, se preciso)
 CMD ["sh", "docker/entrypoint.sh"]
