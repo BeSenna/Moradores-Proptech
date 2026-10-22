@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../auth.service';
+import { obterJwtSecret } from '../jwt-secret';
 
 // Lê o header "Authorization: Bearer <token>", valida a assinatura e
 // injeta o payload decodificado em req.user — usado por todas as rotas protegidas.
@@ -12,7 +13,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET ?? 'troque-por-um-segredo-forte-e-unico',
+      secretOrKey: obterJwtSecret(),
     });
   }
 
