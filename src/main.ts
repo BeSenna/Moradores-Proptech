@@ -8,6 +8,9 @@ async function bootstrap() {
 
   configureApp(app);
 
+  // permite encerrar com SIGTERM (docker stop): fecha o banco e o RabbitMQ antes de sair
+  app.enableShutdownHooks();
+
   const port = process.env.PORT ?? 7522;
   await app.listen(port);
   // eslint-disable-next-line no-console
