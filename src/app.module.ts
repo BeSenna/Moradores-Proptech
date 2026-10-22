@@ -28,8 +28,8 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter'
 export class AppModule {
   constructor() {
     console.log("Aplicação iniciada!");
-    console.log("Banco:", process.env.DATABASE_URL);
-    console.log("API Key:", process.env.API_KEY);
-    console.log("JWT Secret:", process.env.JWT_SECRET);   
+    // console.log("Banco:", process.env.DATABASE_URL);
+    // console.log("API Key:", process.env.API_KEY);
+    // console.log("JWT Secret:", process.env.JWT_SECRET);   
   }
 }

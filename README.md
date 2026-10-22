@@ -179,7 +179,6 @@ ms-moradores/
 │   └── migrations/            # migrations (criação das tabelas)
 ├── prisma.config.ts           # config do Prisma 7 (schema, migrations, DATABASE_URL)
 ├── database/
-│   ├── condominio_morador_tabelas.sql   # SQL das 5 tabelas (MySQL 5.7), executado pelo professor no servidor
 │   └── Morador.sql                      # DDL anterior, mantido como referência
 ├── test/                      # testes e2e e helpers (mock do Prisma)
 ├── src/
@@ -228,7 +227,7 @@ Passo a passo para quem **nunca rodou o projeto**. Antes, três fatos sobre o am
   `20262m_prj5_condominio_morador`). Ele **não** roda em container. O acesso exige estar na rede do Senac
   (ou na VPN), e usuário e senha vêm do grupo, pelo Infisical.
 - **O usuário da aplicação só tem `SELECT/INSERT/UPDATE/DELETE`** nesse banco. As tabelas foram criadas pelo
-  professor com o script `database/condominio_morador_tabelas.sql`; o Prisma Migrate **não** roda no servidor.
+  professor com o script `prisma/migrations/20261019000000_init/migration.sql`; o Prisma Migrate **não** roda no servidor.
 - **As rotas ficam sob o prefixo `/condominio/morador`** e a API escuta na porta **7522**.
 
 Escolha um dos dois caminhos:
@@ -425,7 +424,7 @@ pelo `ADMIN_SENHA`.
 | `404 Not Found` em `/api/...` | O prefixo das rotas agora é `/condominio/morador` (não existe mais `/api`). Exemplo: `/condominio/morador/auth/login` |
 | `port is already allocated` / `EADDRINUSE` | Outra aplicação usa 7522, 5672 ou 15672. Pare a API local (Ctrl+C) antes de subir o Docker, ou mude a porta à esquerda em `ports:` do `docker-compose.yml` |
 | `required variable DATABASE_URL is missing a value` | O compose não achou as variáveis. Rode com `npx infisical run --env=dev -- docker compose up --build` ou crie o `.env` |
-| `CREATE command denied` / `P3014` | O usuário do servidor só tem `SELECT/INSERT/UPDATE/DELETE`. Não rode `prisma migrate` no servidor; peça ao professor para executar `database/condominio_morador_tabelas.sql` |
+| `CREATE command denied` / `P3014` | O usuário do servidor só tem `SELECT/INSERT/UPDATE/DELETE`. Não rode `prisma migrate` no servidor; peça ao professor para executar `prisma/migrations/20261019000000_init/migration.sql` |
 | `Table '...' doesn't exist` / `P2021` | As tabelas ainda não foram criadas nesse banco. Peça ao professor para rodar o script SQL (ou rode `npx prisma migrate deploy` num MySQL **local**) |
 | `P1001: Can't reach database server` / timeout | Sem rede até o servidor: confira se está na rede do Senac/VPN, e o host/porta/usuário/senha da `DATABASE_URL` |
 | `Access denied for user` | Usuário/senha da `DATABASE_URL` errados (lembre de codificar `@` como `%40` na senha) |
@@ -450,7 +449,7 @@ O schema (`prisma/schema.prisma`) espelha o banco `condominio_moradores`. As tab
 
 | Onde | Como as tabelas são criadas |
 |---|---|
-| **Servidor da faculdade** (MySQL 5.7) | O **professor** executa `database/condominio_morador_tabelas.sql` (cria só as tabelas; o banco já existe). O usuário da aplicação não tem permissão de `CREATE`/`ALTER` |
+| **Servidor da faculdade** (MySQL 5.7) | O **professor** executa `prisma/migrations/20261019000000_init/migration.sql` (cria só as tabelas; o banco já existe). O usuário da aplicação não tem permissão de `CREATE`/`ALTER` |
 | **MySQL local** (desenvolvimento) | `npx prisma migrate deploy` (migration `20261019000000_init`) |
 
 **Em tempo de execução** a API só precisa de `SELECT/INSERT/UPDATE/DELETE`: todas as exclusões são lógicas
