@@ -7,7 +7,7 @@
 #
 # API:      http://localhost:7522/condominio/morador        Swagger: http://localhost:7522/condominio/morador/docs
 # RabbitMQ: http://localhost:15672 (guest / guest)
-# O schema é criado por `prisma migrate deploy` e o síndico inicial pela própria API (ADMIN_LOGIN/ADMIN_SENHA).
+# As tabelas já existem no servidor (criadas pelo professor); o síndico inicial é criado pela própria API (ADMIN_LOGIN/ADMIN_SENHA).
 services:
   rabbitmq:
     image: rabbitmq:3-management

@@ -42,7 +42,7 @@ export class MoradorService {
     return morador;
   }
 
-  // GET /api/morador?busca=ana&status=1&page=1&pageSize=20
+  // GET /condominio/morador/morador?busca=ana&status=1&page=1&pageSize=20
   // "busca" procura em nome, CPF e e-mail
   async findAll(params: { page?: number; pageSize?: number; status?: number; busca?: string }) {
     const page = params.page && params.page > 0 ? params.page : 1;

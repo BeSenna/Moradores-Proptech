@@ -47,7 +47,7 @@ export class ImovelService {
     return imovel;
   }
 
-  // GET /api/imovel?blocoId=1&tipo=APARTAMENTO&page=1&pageSize=20
+  // GET /condominio/morador/imovel?blocoId=1&tipo=APARTAMENTO&page=1&pageSize=20
   async findAll(params: {
     page?: number;
     pageSize?: number;

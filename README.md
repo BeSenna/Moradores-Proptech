@@ -212,7 +212,7 @@ ms-moradores/
 │           └── dto/create-<nome>.dto.ts, update-<nome>.dto.ts
 │
 ├── .env.example
-├── .infisical.json            # vínculo com o projeto no Infisical
+├── .infisical.yaml            # vínculo com o projeto no Infisical
 ├── Dockerfile / docker-compose.yml / docker/entrypoint.sh
 ├── package.json
 ├── tsconfig.json

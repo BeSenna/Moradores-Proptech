@@ -28,7 +28,7 @@ export class BlocoController {
     return this.blocoService.create(dto);
   }
 
-  // GET /api/bloco?page=1&pageSize=20&status=1&busca=torre
+  // GET /condominio/morador/bloco?page=1&pageSize=20&status=1&busca=torre
   @Get()
   findAll(
     @Query('page') page?: string,

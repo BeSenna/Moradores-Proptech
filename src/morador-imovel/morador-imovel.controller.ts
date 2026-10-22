@@ -32,7 +32,7 @@ export class MoradorImovelController {
     return this.moradorImovelService.create(dto);
   }
 
-  // GET /api/morador-imovel?tipoRelacao=PROPRIETARIO&moradorId=5&imovelId=12
+  // GET /condominio/morador/morador-imovel?tipoRelacao=PROPRIETARIO&moradorId=5&imovelId=12
   @Get()
   findAll(
     @Query('page') page?: string,
