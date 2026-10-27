@@ -144,30 +144,75 @@ describe('MS Moradores (e2e)', () => {
       await request(app.getHttpServer())
         .post('/condominio/morador/morador')
         .set(bearer(token))
-        .send({ moradorNome: 'Ana', moradorCpf: '11122233344' })
+        .send({ moradorNome: 'Ana', moradorCpf: '52998224725' })
         .expect(403);
     });
   });
 
   describe('permissões por perfil', () => {
-    it('MORADOR consegue listar moradores (GET) → 200', async () => {
+    it('SÍNDICO consegue listar moradores (GET) → 200', async () => {
       prisma.morador.findMany.mockResolvedValue([]);
       prisma.morador.count.mockResolvedValue(0);
 
       const res = await request(app.getHttpServer())
         .get('/condominio/morador/morador')
-        .set(bearer(tokenDe(MORADOR, 'MORADOR')))
+        .set(bearer(tokenDe(SINDICO, 'SINDICO')))
         .expect(200);
 
       expect(res.body).toEqual({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 });
     });
 
+    it('MORADOR lê o próprio cadastro, mas não o de outro morador (LGPD)', async () => {
+      const token = jwt.sign({ sub: MORADOR, usuarioId: MORADOR, moradorId: 7, usuarioPerfil: 'MORADOR' });
+      prisma.morador.findUnique.mockResolvedValue({ moradorId: 7, moradorNome: 'Ana' });
+
+      await request(app.getHttpServer())
+        .get('/condominio/morador/morador/7').set(bearer(token)).expect(200);
+      await request(app.getHttpServer())
+        .get('/condominio/morador/morador/8').set(bearer(token)).expect(403);
+    });
+
+    it('MORADOR vê o imóvel sem CPF/e-mail/telefone dos moradores vinculados', async () => {
+      prisma.imovel.findUnique.mockResolvedValue({
+        imovelId: 3,
+        bloco: { blocoId: 1 },
+        moradorImoveis: [{
+          moradorImovelId: 1,
+          morador: { moradorId: 7, moradorNome: 'Ana', moradorCpf: '52998224725', moradorEmail: 'a@a.com', moradorTelefone: '2199' },
+        }],
+      });
+
+      const comoMorador = await request(app.getHttpServer())
+        .get('/condominio/morador/imovel/3').set(bearer(tokenDe(MORADOR, 'MORADOR'))).expect(200);
+      expect(comoMorador.body.moradorImoveis[0].morador).toEqual({ moradorId: 7, moradorNome: 'Ana' });
+
+      const comoSindico = await request(app.getHttpServer())
+        .get('/condominio/morador/imovel/3').set(bearer(tokenDe(SINDICO, 'SINDICO'))).expect(200);
+      expect(comoSindico.body.moradorImoveis[0].morador.moradorCpf).toBe('52998224725');
+    });
+
+    it('MORADOR lê a própria relação, mas não a de outro morador', async () => {
+      const token = jwt.sign({ sub: MORADOR, usuarioId: MORADOR, moradorId: 7, usuarioPerfil: 'MORADOR' });
+      prisma.moradorImovel.findUnique.mockImplementation(async ({ where }: any) => ({
+        moradorImovelId: where.moradorImovelId,
+        moradorId: where.moradorImovelId === 1 ? 7 : 8,
+        moradorImovelDataFim: null,
+      }));
+
+      await request(app.getHttpServer())
+        .get('/condominio/morador/morador-imovel/1').set(bearer(token)).expect(200);
+      await request(app.getHttpServer())
+        .get('/condominio/morador/morador-imovel/2').set(bearer(token)).expect(403);
+    });
+
     it.each([
-      ['POST', '/condominio/morador/morador', { moradorNome: 'Ana', moradorCpf: '11122233344' }],
+      ['POST', '/condominio/morador/morador', { moradorNome: 'Ana', moradorCpf: '52998224725' }],
       ['PATCH', '/condominio/morador/morador/1', { moradorNome: 'Ana' }],
       ['DELETE', '/condominio/morador/morador/1', undefined],
       ['POST', '/condominio/morador/bloco', { blocoNome: 'A' }],
       ['GET', '/condominio/morador/usuario', undefined],
+      ['GET', '/condominio/morador/morador', undefined],
+      ['GET', '/condominio/morador/morador-imovel', undefined],
     ])('MORADOR em %s %s → 403', async (metodo, url, corpo) => {
       const req = (request(app.getHttpServer()) as any)[metodo.toLowerCase()](url).set(
         bearer(tokenDe(MORADOR, 'MORADOR')),
@@ -185,12 +230,18 @@ describe('MS Moradores (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/condominio/morador/morador')
         .set(sindico())
-        .send({ moradorNome: 'Ana', moradorCpf: '11122233344', moradorEmail: 'ana@email.com' })
+        .send({ moradorNome: 'Ana', moradorCpf: '52998224725', moradorEmail: 'ana@email.com' })
         .expect(201);
 
       expect(res.body.moradorId).toBe(7);
       expect(prisma.morador.create.mock.calls[0][0].data.moradorStatus).toBe(1);
       expect(events.publish).toHaveBeenCalledWith('morador.cadastrado', expect.objectContaining({ moradorId: 7 }));
+    });
+
+    it.each(['abcdefghijk', '11111111111', '52998224724'])('POST com CPF "%s" → 400', async (cpf) => {
+      await request(app.getHttpServer())
+        .post('/condominio/morador/morador').set(sindico())
+        .send({ moradorNome: 'Ana', moradorCpf: cpf }).expect(400);
     });
 
     it('POST com CPF inválido → 400', async () => {
@@ -208,7 +259,7 @@ describe('MS Moradores (e2e)', () => {
       await request(app.getHttpServer())
         .post('/condominio/morador/morador')
         .set(sindico())
-        .send({ moradorNome: 'Ana', moradorCpf: '11122233344', admin: true })
+        .send({ moradorNome: 'Ana', moradorCpf: '52998224725', admin: true })
         .expect(400);
     });
 
@@ -224,7 +275,7 @@ describe('MS Moradores (e2e)', () => {
       await request(app.getHttpServer())
         .post('/condominio/morador/morador')
         .set(sindico())
-        .send({ moradorNome: 'Ana', moradorCpf: '11122233344' })
+        .send({ moradorNome: 'Ana', moradorCpf: '52998224725' })
         .expect(409);
     });
 
@@ -263,6 +314,22 @@ describe('MS Moradores (e2e)', () => {
         where: { moradorId: 7 },
         data: { moradorStatus: 0 },
       });
+    });
+  });
+
+  describe('filtros de query inválidos → 400 (nunca 500)', () => {
+    it.each([
+      '/condominio/morador/morador?status=abc',
+      '/condominio/morador/morador?page=abc',
+      '/condominio/morador/imovel?tipo=abc',
+      '/condominio/morador/imovel?blocoId=x',
+      '/condominio/morador/usuario?perfil=abc',
+      '/condominio/morador/bloco?pageSize=x',
+      '/condominio/morador/morador-imovel?tipoRelacao=abc',
+      '/condominio/morador/morador-imovel?moradorId=x',
+    ])('GET %s', async (url) => {
+      await request(app.getHttpServer())
+        .get(url).set(bearer(tokenDe(SINDICO, 'SINDICO'))).expect(400);
     });
   });
 

@@ -141,7 +141,9 @@ export class MoradorImovelService {
             : undefined,
           moradorImovelDataFim: dto.moradorImovelDataFim
             ? new Date(dto.moradorImovelDataFim)
-            : undefined,
+            : dto.moradorImovelDataFim === null
+              ? null
+              : undefined,
         },
       });
       return this.comEstadoDerivado(vinculo);

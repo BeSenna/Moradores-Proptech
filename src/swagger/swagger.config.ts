@@ -187,7 +187,7 @@ const EX_IMOVEL = {
 const EX_MORADOR = {
   moradorId: 7,
   moradorNome: 'Ana Beatriz Souza',
-  moradorCpf: '11122233344',
+  moradorCpf: '52998224725',
   moradorEmail: 'ana.souza@email.com',
   moradorTelefone: '(21) 99999-0000',
   moradorDataNascimento: '1990-05-14T00:00:00.000Z',
@@ -249,7 +249,7 @@ const imovelBase = {
 const moradorBase = {
   moradorId: int(7),
   moradorNome: str('Ana Beatriz Souza'),
-  moradorCpf: str('11122233344', 'CPF com 11 dígitos, sem pontuação (único)'),
+  moradorCpf: str('52998224725', 'CPF válido (11 dígitos, sem pontuação, com dígitos verificadores corretos) — único'),
   moradorEmail: { ...str('ana.souza@email.com', 'E-mail (único)'), nullable: true },
   moradorTelefone: { ...str('(21) 99999-0000'), nullable: true },
   moradorDataNascimento: { ...dateTime('1990-05-14T00:00:00.000Z'), nullable: true },
@@ -311,7 +311,7 @@ const imovelCreate = obj(
 const moradorCreate = obj(
   {
     moradorNome: str('Ana Beatriz Souza', undefined, { maxLength: 300 }),
-    moradorCpf: str('11122233344', 'Exatamente 11 dígitos, sem pontuação', {
+    moradorCpf: str('52998224725', 'CPF válido: 11 dígitos, sem pontuação, dígitos verificadores corretos', {
       minLength: 11,
       maxLength: 11,
     }),
@@ -601,11 +601,11 @@ const paths: Record<string, any> = {
     post: op({
       tag: 'Morador',
       summary: 'Cadastra um morador',
-      description: 'CPF (11 dígitos, sem pontuação) e e-mail são únicos.',
+      description: 'CPF (11 dígitos, sem pontuação, validado pelos dígitos verificadores) e e-mail são únicos.',
       sindico: true,
       requestBody: body('MoradorCreate', {
         moradorNome: 'Ana Beatriz Souza',
-        moradorCpf: '11122233344',
+        moradorCpf: '52998224725',
         moradorEmail: 'ana.souza@email.com',
         moradorTelefone: '(21) 99999-0000',
         moradorDataNascimento: '1990-05-14',
@@ -616,7 +616,8 @@ const paths: Record<string, any> = {
     get: op({
       tag: 'Morador',
       summary: 'Lista moradores',
-      description: 'Lista paginada, ordenada por nome.',
+      description: 'Lista paginada, ordenada por nome. Expõe CPF, e-mail e telefone de todos os moradores, por isso é restrita ao síndico (LGPD). Filtros inválidos (ex.: `status=abc`) retornam 400.',
+      sindico: true,
       parameters: [
         P_PAGE,
         P_SIZE,
@@ -631,7 +632,7 @@ const paths: Record<string, any> = {
       tag: 'Morador',
       summary: 'Detalhe do morador',
       description:
-        'Retorna o morador com os imóveis vinculados (e o bloco de cada um). Usado pelo MS Serviços para validar `morador_id`. Atenção: não filtra por status, então um morador excluído logicamente ainda é retornado (com `moradorStatus: 0`).',
+        'Retorna o morador com os imóveis vinculados (e o bloco de cada um). **Acesso:** o síndico lê qualquer morador; um usuário MORADOR lê apenas o próprio cadastro (`moradorId` do seu token) e recebe 403 para os demais. Atenção: não filtra por status, então um morador excluído logicamente ainda é retornado (com `moradorStatus: 0`).',
       parameters: [idParam('morador', 7)],
       ok: [
         200,
@@ -639,11 +640,12 @@ const paths: Record<string, any> = {
         ref('MoradorDetalhe'),
         { ...EX_MORADOR, moradorImoveis: [{ ...EX_REL, imovel: { ...EX_IMOVEL, bloco: EX_BLOCO } }] },
       ],
-      errors: [[404, 'Morador #99 não encontrado.']],
+      errors: [[403, 'Você só pode consultar o seu próprio cadastro.'], [404, 'Morador #99 não encontrado.']],
     }),
     patch: op({
       tag: 'Morador',
       summary: 'Edita parcialmente um morador',
+      description: 'Campos ausentes não são alterados; `null` limpa e-mail, telefone e data de nascimento.',
       sindico: true,
       parameters: [idParam('morador', 7)],
       requestBody: body('MoradorUpdate', { moradorTelefone: '(21) 98888-7777' }),
@@ -683,7 +685,8 @@ const paths: Record<string, any> = {
     get: op({
       tag: 'Morador x Imóvel',
       summary: 'Lista relações',
-      description: 'Lista paginada, da mais recente para a mais antiga, com o morador e o imóvel resumidos. Cada item traz o `estado` derivado.',
+      description: 'Lista paginada, da mais recente para a mais antiga, com o morador e o imóvel resumidos. Cada item traz o `estado` derivado. Restrita ao síndico; o morador consulta a sua relação em `GET /morador/{id}`.',
+      sindico: true,
       parameters: [
         P_PAGE,
         P_SIZE,
@@ -708,7 +711,7 @@ const paths: Record<string, any> = {
     get: op({
       tag: 'Morador x Imóvel',
       summary: 'Detalhe da relação',
-      description: 'Retorna a relação com morador, imóvel e bloco.',
+      description: 'Retorna a relação com morador, imóvel e bloco. **Acesso:** o síndico lê qualquer relação; um usuário MORADOR lê apenas as suas (403 nas demais).',
       parameters: [idParam('relação (morador_imovel_id)', 15)],
       ok: [
         200,
@@ -716,12 +719,12 @@ const paths: Record<string, any> = {
         ref('MoradorImovelDetalhe'),
         { ...EX_REL, morador: EX_MORADOR, imovel: { ...EX_IMOVEL, bloco: EX_BLOCO } },
       ],
-      errors: [[404, 'Relação #99 não encontrada.']],
+      errors: [[403, 'Você só pode consultar as suas próprias relações.'], [404, 'Relação #99 não encontrada.']],
     }),
     patch: op({
       tag: 'Morador x Imóvel',
       summary: 'Edita parcialmente uma relação',
-      description: 'Mesmas validações do POST (inclusive `dataFim` ≥ `dataInicio`).',
+      description: 'Mesmas validações do POST (inclusive `dataFim` ≥ `dataInicio`). Enviar `moradorImovelDataFim: null` reabre a relação (limpa a data de fim).',
       sindico: true,
       parameters: [idParam('relação (morador_imovel_id)', 15)],
       requestBody: body('MoradorImovelUpdate', { moradorImovelTipoRelacao: 'INQUILINO' }),
@@ -763,7 +766,7 @@ const paths: Record<string, any> = {
       tag: 'Usuário',
       summary: 'Cria uma conta de acesso',
       description:
-        'A `senha` vai em texto puro no corpo e é gravada como hash bcrypt (nunca retorna). Se `moradorImovelId` for enviado, a conta já é vinculada a essa relação (`morador_imovel.usuario_id`) na mesma transação.',
+        'A `senha` vai em texto puro no corpo e é gravada como hash bcrypt (nunca retorna). Se `moradorImovelId` for enviado, a conta já é vinculada a essa relação (`morador_imovel.usuario_id`) na mesma transação; relação inexistente retorna 404 e relação que já tem conta ativa retorna 409.',
       sindico: true,
       requestBody: body('UsuarioCreate', {
         usuarioLogin: 'ana.souza',

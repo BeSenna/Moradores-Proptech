@@ -158,4 +158,24 @@ describe('MoradorImovelService', () => {
       });
     });
   });
+
+  describe('update — reabrir o vínculo', () => {
+    it('data_fim = null limpa a data de fim no banco', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo({ moradorImovelDataFim: new Date('2026-10-01') }));
+      prisma.moradorImovel.update.mockResolvedValue(vinculo());
+
+      await service.update(15, { moradorImovelDataFim: null });
+
+      expect(prisma.moradorImovel.update.mock.calls[0][0].data.moradorImovelDataFim).toBeNull();
+    });
+
+    it('data_fim ausente não altera a data de fim', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo());
+      prisma.moradorImovel.update.mockResolvedValue(vinculo());
+
+      await service.update(15, { moradorImovelStatus: 1 });
+
+      expect(prisma.moradorImovel.update.mock.calls[0][0].data.moradorImovelDataFim).toBeUndefined();
+    });
+  });
 });

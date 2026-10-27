@@ -546,7 +546,7 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 |---|---|---|---|
 | `POST` | `/imovel` | 👑 | Cria um imóvel (valida que o bloco existe) |
 | `GET` | `/imovel?blocoId=&tipo=&status=` | 🔒 | Lista paginada, filtrável por bloco e tipo |
-| `GET` | `/imovel/:id` | 🔒 | Detalhe + bloco + moradores vinculados |
+| `GET` | `/imovel/:id` | 🔒 | Detalhe + bloco + moradores vinculados (para o morador, só id e nome dos vinculados) |
 | `PATCH` | `/imovel/:id` | 👑 | Edição parcial |
 | `DELETE` | `/imovel/:id` | 👑 | Soft-delete (`imovel_status = 0`) |
 
@@ -555,8 +555,8 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | `POST` | `/morador` | 👑 | Cria um morador (CPF e e-mail únicos) |
-| `GET` | `/morador?busca=&status=` | 🔒 | Lista paginada; `busca` procura em nome, CPF e e-mail |
-| `GET` | `/morador/:id` | 🔒 | Detalhe + imóveis vinculados |
+| `GET` | `/morador?busca=&status=` | 👑 | Lista paginada; `busca` procura em nome, CPF e e-mail |
+| `GET` | `/morador/:id` | 🔒 | Detalhe + imóveis vinculados (síndico: qualquer um; morador: só o próprio, senão 403) |
 | `PATCH` | `/morador/:id` | 👑 | Edição parcial |
 | `DELETE` | `/morador/:id` | 👑 | Soft-delete (`morador_status = 0`) |
 
@@ -592,8 +592,8 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | `POST` | `/morador-imovel` | 👑 | Cria o vínculo morador↔imóvel |
-| `GET` | `/morador-imovel?moradorId=&imovelId=&tipoRelacao=&status=` | 🔒 | Lista paginada, com `estado` derivado |
-| `GET` | `/morador-imovel/:id` | 🔒 | Detalhe + morador + imóvel + bloco |
+| `GET` | `/morador-imovel?moradorId=&imovelId=&tipoRelacao=&status=` | 👑 | Lista paginada, com `estado` derivado |
+| `GET` | `/morador-imovel/:id` | 🔒 | Detalhe + morador + imóvel + bloco (síndico: qualquer um; morador: só as próprias, senão 403) |
 | `PATCH` | `/morador-imovel/:id` | 👑 | Edição parcial |
 | `PATCH` | `/morador-imovel/:id/encerrar` | 👑 | Define `morador_imovel_data_fim` |
 | `DELETE` | `/morador-imovel/:id` | 👑 | Soft-delete (`morador_imovel_status = 0`) |
@@ -660,21 +660,28 @@ A publicação usa `emit()` (fire-and-forget) — se o RabbitMQ estiver indispon
 - **Senha nunca retorna na API.** `UsuarioService` usa um `select` explícito
   (constante `SEM_SENHA`) que exclui `usuario_senha_hash` de toda resposta,
   inclusive listagens.
-- **Rotas de leitura mais abertas que as de escrita.** `GET` de bloco/imóvel/
-  morador só exige autenticação (qualquer perfil), porque os outros
-  microsserviços também os consultam para validação síncrona de `imovel_id` e
-  `morador_id`. As escritas são restritas a `SINDICO`.
+- **Leitura de dados pessoais é restrita (LGPD).** `GET` de bloco e imóvel só exige
+  autenticação (qualquer perfil). Já as listas de moradores e de relações são só do
+  `SINDICO`; o detalhe de morador/relação é do síndico ou do próprio morador
+  (`moradorId` do token), e o detalhe do imóvel esconde CPF/e-mail/telefone dos
+  demais moradores para o perfil `MORADOR`. As escritas são restritas a `SINDICO`.
+  Os outros microsserviços que validam `morador_id` via `GET /morador/:id` precisam
+  encaminhar o token do síndico ou do próprio morador.
+- **Filtros de query são validados.** `page`, `status`, `blocoId` etc. aceitam só
+  inteiros e `tipo`/`tipoRelacao`/`perfil` só os valores do enum — caso contrário, 400
+  (decorators `@QueryInt` / `@QueryEnum` em `src/common/decorators`).
+- **CPF é validado de verdade.** 11 dígitos e dígitos verificadores corretos
+  (`src/common/validators/is-cpf.validator.ts`); `00000000000`, `11111111111` etc. são rejeitados.
+- **`PATCH` com `null` limpa o campo.** E-mail, telefone, data de nascimento do morador
+  e `moradorImovelDataFim` (reabre o vínculo) podem ser limpos enviando `null`.
 
 ## Limitações conhecidas e próximos passos
 
-- A migração para o Prisma 7 foi validada com build, 64 testes unitários/e2e (Prisma
+- A migração para o Prisma 7 foi validada com build, 100+ testes unitários/e2e (Prisma
   mockado), execução local com Infisical e execução via Docker Compose.
-- A API imprime `DATABASE_URL`, `API_KEY` e `JWT_SECRET` no log ao iniciar (`src/app.module.ts`).
-  Útil em desenvolvimento, mas **deve ser removido antes de qualquer entrega/produção**.
-- Endpoints equivalentes para o morador comum (ex.: `/me/imovel`, `/me/relacoes`,
-  usando o `moradorId` do próprio token em vez de regra por perfil) ainda não
-  existem — hoje o morador comum só tem acesso de leitura às mesmas rotas do
-  síndico, sem filtro automático pelos seus próprios dados.
+- Endpoints dedicados ao morador comum (ex.: `/me/imovel`, `/me/relacoes`) ainda não
+  existem; hoje ele usa `GET /morador/:id` com o próprio `moradorId`, que já traz os
+  imóveis vinculados.
 - As tabelas do servidor da faculdade só podem ser criadas ou alteradas pelo professor (o usuário da
   aplicação não tem `CREATE`/`ALTER`); mudanças de schema seguem o fluxo da seção [Banco de dados](#banco-de-dados).
 - Os testes automatizados não usam um MySQL real (Prisma mockado). Um próximo passo

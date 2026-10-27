@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -15,7 +16,10 @@ import { CreateMoradorDto } from './dto/create-morador.dto';
 import { UpdateMoradorDto } from './dto/update-morador.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { QueryInt } from '../common/decorators/query-params.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtPayload } from '../auth/auth.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('morador')
@@ -28,24 +32,24 @@ export class MoradorController {
     return this.moradorService.create(dto);
   }
 
+  // Lista com CPF, e-mail e telefone de todos os moradores: só o síndico (LGPD).
+  @Roles('SINDICO')
   @Get()
   findAll(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('status') status?: string,
+    @QueryInt('page') page?: number,
+    @QueryInt('pageSize') pageSize?: number,
+    @QueryInt('status') status?: number,
     @Query('busca') busca?: string,
   ) {
-    return this.moradorService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      status: status !== undefined ? Number(status) : undefined,
-      busca,
-    });
+    return this.moradorService.findAll({ page, pageSize, status, busca });
   }
 
-  
+  // O síndico lê qualquer morador; o morador lê apenas o próprio cadastro.
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: JwtPayload) {
+    if (user.usuarioPerfil !== 'SINDICO' && user.moradorId !== id) {
+      throw new ForbiddenException('Você só pode consultar o seu próprio cadastro.');
+    }
     return this.moradorService.findOne(id);
   }
 

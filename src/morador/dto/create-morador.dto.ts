@@ -5,9 +5,9 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Length,
   MaxLength,
 } from 'class-validator';
+import { IsCpf } from '../../common/validators/is-cpf.validator';
 
 export class CreateMoradorDto {
   @IsString()
@@ -16,7 +16,7 @@ export class CreateMoradorDto {
   moradorNome!: string;
 
   @IsString()
-  @Length(11, 11, { message: 'morador_cpf deve ter exatamente 11 dígitos (sem pontuação).' })
+  @IsCpf()
   moradorCpf!: string;
 
   @IsOptional()

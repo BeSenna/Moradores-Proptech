@@ -92,9 +92,12 @@ export class MoradorService {
       where: { moradorId },
       data: {
         ...dto,
+        // string -> Date; null limpa o campo; ausente não altera
         moradorDataNascimento: dto.moradorDataNascimento
           ? new Date(dto.moradorDataNascimento)
-          : undefined,
+          : dto.moradorDataNascimento === null
+            ? null
+            : undefined,
       },
     });
   } catch (e) {

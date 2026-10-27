@@ -38,6 +38,19 @@ export class UsuarioService {
         });
 
         if (moradorImovelId) {
+          const vinculo = await tx.moradorImovel.findUnique({
+            where: { moradorImovelId },
+            select: { usuario: { select: { usuarioLogin: true, usuarioStatus: true } } },
+          });
+          if (!vinculo) {
+            throw new NotFoundException(`Relação #${moradorImovelId} não encontrada.`);
+          }
+          // não troca em silêncio o acesso de uma relação que já tem conta ativa
+          if (vinculo.usuario && vinculo.usuario.usuarioStatus === 1) {
+            throw new ConflictException(
+              `A relação #${moradorImovelId} já está vinculada ao usuário "${vinculo.usuario.usuarioLogin}".`,
+            );
+          }
           await tx.moradorImovel.update({
             where: { moradorImovelId },
             data: { usuarioId: usuario.usuarioId },

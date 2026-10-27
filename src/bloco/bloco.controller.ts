@@ -15,6 +15,7 @@ import { CreateBlocoDto } from './dto/create-bloco.dto';
 import { UpdateBlocoDto } from './dto/update-bloco.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { QueryInt } from '../common/decorators/query-params.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,17 +32,12 @@ export class BlocoController {
   // GET /condominio/morador/bloco?page=1&pageSize=20&status=1&busca=torre
   @Get()
   findAll(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('status') status?: string,
+    @QueryInt('page') page?: number,
+    @QueryInt('pageSize') pageSize?: number,
+    @QueryInt('status') status?: number,
     @Query('busca') busca?: string,
   ) {
-    return this.blocoService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      status: status !== undefined ? Number(status) : undefined,
-      busca,
-    });
+    return this.blocoService.findAll({ page, pageSize, status, busca });
   }
 
   @Get(':id')

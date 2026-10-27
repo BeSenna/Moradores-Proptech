@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { MoradorImovelTipoRelacao } from '../generated/prisma/client';
@@ -19,7 +19,10 @@ import {
 } from './dto/update-morador-imovel.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { QueryInt, QueryEnum } from '../common/decorators/query-params.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtPayload } from '../auth/auth.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('morador-imovel')
@@ -33,28 +36,36 @@ export class MoradorImovelController {
   }
 
   // GET /condominio/morador/morador-imovel?tipoRelacao=PROPRIETARIO&moradorId=5&imovelId=12
+  // Lista de todas as relações: só o síndico. O morador consulta a sua em GET /morador/:id.
+  @Roles('SINDICO')
   @Get()
   findAll(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('moradorId') moradorId?: string,
-    @Query('imovelId') imovelId?: string,
-    @Query('tipoRelacao') tipoRelacao?: MoradorImovelTipoRelacao,
-    @Query('status') status?: string,
+    @QueryInt('page') page?: number,
+    @QueryInt('pageSize') pageSize?: number,
+    @QueryInt('moradorId') moradorId?: number,
+    @QueryInt('imovelId') imovelId?: number,
+    @QueryEnum({ nome: 'tipoRelacao', valores: Object.values(MoradorImovelTipoRelacao) })
+    tipoRelacao?: MoradorImovelTipoRelacao,
+    @QueryInt('status') status?: number,
   ) {
     return this.moradorImovelService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      moradorId: moradorId ? Number(moradorId) : undefined,
-      imovelId: imovelId ? Number(imovelId) : undefined,
+      page,
+      pageSize,
+      moradorId,
+      imovelId,
       tipoRelacao,
-      status: status !== undefined ? Number(status) : undefined,
+      status,
     });
   }
 
+  // O síndico lê qualquer relação; o morador, apenas as próprias.
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.moradorImovelService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: JwtPayload) {
+    const vinculo = await this.moradorImovelService.findOne(id);
+    if (user.usuarioPerfil !== 'SINDICO' && vinculo.moradorId !== user.moradorId) {
+      throw new ForbiddenException('Você só pode consultar as suas próprias relações.');
+    }
+    return vinculo;
   }
 
   @Roles('SINDICO')

@@ -18,7 +18,7 @@ describe('MoradorService', () => {
     it('aplica moradorStatus = 1 por padrão e publica morador.cadastrado', async () => {
       prisma.morador.create.mockResolvedValue({ moradorId: 7, moradorNome: 'Ana', moradorStatus: 1 });
 
-      await service.create({ moradorNome: 'Ana', moradorCpf: '11122233344' } as any);
+      await service.create({ moradorNome: 'Ana', moradorCpf: '52998224725' } as any);
 
       expect(prisma.morador.create.mock.calls[0][0].data).toMatchObject({ moradorStatus: 1 });
       expect(events.publish).toHaveBeenCalledWith('morador.cadastrado', {
@@ -31,7 +31,7 @@ describe('MoradorService', () => {
     it('respeita o moradorStatus enviado', async () => {
       prisma.morador.create.mockResolvedValue({ moradorId: 8, moradorNome: 'B', moradorStatus: 0 });
 
-      await service.create({ moradorNome: 'B', moradorCpf: '11122233344', moradorStatus: 0 } as any);
+      await service.create({ moradorNome: 'B', moradorCpf: '52998224725', moradorStatus: 0 } as any);
 
       expect(prisma.morador.create.mock.calls[0][0].data.moradorStatus).toBe(0);
     });
@@ -41,7 +41,7 @@ describe('MoradorService', () => {
 
       await service.create({
         moradorNome: 'Ana',
-        moradorCpf: '11122233344',
+        moradorCpf: '52998224725',
         moradorDataNascimento: '1990-05-14',
       } as any);
 
@@ -58,12 +58,12 @@ describe('MoradorService', () => {
       );
 
       await expect(
-        service.create({ moradorNome: 'Ana', moradorCpf: '11122233344' } as any),
+        service.create({ moradorNome: 'Ana', moradorCpf: '52998224725' } as any),
       ).rejects.toBeInstanceOf(ConflictException);
 
       // a mensagem do 409 deve citar o campo duplicado
       await expect(
-        service.create({ moradorNome: 'Ana', moradorCpf: '11122233344' } as any),
+        service.create({ moradorNome: 'Ana', moradorCpf: '52998224725' } as any),
       ).rejects.toThrow('CPF');
 
       expect(events.publish).not.toHaveBeenCalled();

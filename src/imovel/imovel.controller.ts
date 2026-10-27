@@ -7,7 +7,6 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ImovelTipo } from '../generated/prisma/client';
@@ -16,7 +15,10 @@ import { CreateImovelDto } from './dto/create-imovel.dto';
 import { UpdateImovelDto } from './dto/update-imovel.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { QueryInt, QueryEnum } from '../common/decorators/query-params.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtPayload } from '../auth/auth.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('imovel')
@@ -31,25 +33,29 @@ export class ImovelController {
 
   @Get()
   findAll(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('blocoId') blocoId?: string,
-    @Query('tipo') tipo?: ImovelTipo,
-    @Query('status') status?: string,
+    @QueryInt('page') page?: number,
+    @QueryInt('pageSize') pageSize?: number,
+    @QueryInt('blocoId') blocoId?: number,
+    @QueryEnum({ nome: 'tipo', valores: Object.values(ImovelTipo) }) tipo?: ImovelTipo,
+    @QueryInt('status') status?: number,
   ) {
-    return this.imovelService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      blocoId: blocoId ? Number(blocoId) : undefined,
-      tipo,
-      status: status !== undefined ? Number(status) : undefined,
-    });
+    return this.imovelService.findAll({ page, pageSize, blocoId, tipo, status });
   }
 
   
+  // O detalhe traz os moradores vinculados (com CPF, e-mail e telefone). Para o síndico vai completo;
+  // para um MORADOR, os vínculos mostram só id e nome dos outros moradores (LGPD).
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.imovelService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: JwtPayload) {
+    const imovel = await this.imovelService.findOne(id);
+    if (user.usuarioPerfil === 'SINDICO') return imovel;
+    return {
+      ...imovel,
+      moradorImoveis: imovel.moradorImoveis.map((v) => ({
+        ...v,
+        morador: { moradorId: v.morador.moradorId, moradorNome: v.morador.moradorNome },
+      })),
+    };
   }
 
   @Roles('SINDICO')

@@ -7,14 +7,15 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
+import { UsuarioPerfil } from '../generated/prisma/client';
 import { UsuarioService } from './usuario.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto, ChangePasswordDto } from './dto/update-usuario.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { QueryInt, QueryEnum } from '../common/decorators/query-params.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 // Toda a gestão de contas (criar, listar, trocar senha, revogar) é restrita ao síndico.
@@ -31,15 +32,11 @@ export class UsuarioController {
 
   @Get()
   findAll(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('perfil') perfil?: string,
+    @QueryInt('page') page?: number,
+    @QueryInt('pageSize') pageSize?: number,
+    @QueryEnum({ nome: 'perfil', valores: Object.values(UsuarioPerfil) }) perfil?: UsuarioPerfil,
   ) {
-    return this.usuarioService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      perfil,
-    });
+    return this.usuarioService.findAll({ page, pageSize, perfil });
   }
 
   @Get(':id')

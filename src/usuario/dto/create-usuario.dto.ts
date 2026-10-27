@@ -1,5 +1,5 @@
 import { UsuarioPerfil } from '../../generated/prisma/client';
-import { IsEnum, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateUsuarioDto {
   @IsString()
@@ -22,5 +22,7 @@ export class CreateUsuarioDto {
 
   // Opcional: já vincula este usuário a uma relação morador_imovel existente na criação.
   @IsOptional()
+  @IsInt()
+  @Min(1)
   moradorImovelId?: number;
 }
