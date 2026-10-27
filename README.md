@@ -20,6 +20,7 @@ têm bancos próprios e consultam este serviço via HTTP para validar `imovel_id
 - [Autenticação e autorização](#autenticação-e-autorização)
 - [Estrutura de pastas](#estrutura-de-pastas)
 - [Guia de instalação do zero (outra máquina)](#guia-de-instalação-do-zero-outra-máquina)
+- [Deploy (Jenkins)](#deploy-jenkins)
 - [Banco de dados](#banco-de-dados)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
 - [Referência da API](#referência-da-api)
@@ -166,7 +167,9 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
 | Operação | Quem pode |
 |---|---|
 | `POST /condominio/morador/auth/login` | qualquer um (rota pública) |
-| `GET` de bloco / imóvel / morador / relação | qualquer usuário autenticado (outros microsserviços também consultam) |
+| `GET` de bloco e de imóvel (lista e detalhe) | qualquer usuário autenticado (no detalhe do imóvel, o `MORADOR` não vê CPF/e-mail/telefone dos moradores vinculados) |
+| `GET` da **lista** de moradores e da **lista** de relações | só `SINDICO` (dados pessoais — LGPD) |
+| `GET /morador/:id` e `GET /morador-imovel/:id` | `SINDICO` (qualquer registro) ou o próprio morador (`moradorId` do token); outro morador recebe `403` |
 | Escrita (`POST` / `PATCH` / `DELETE`) de bloco / imóvel / morador / relação | só `SINDICO` |
 | Tudo em `usuario` (criar conta, listar, trocar senha, revogar) | só `SINDICO` |
 
@@ -403,7 +406,7 @@ Está no ar quando aparecer `MS Moradores rodando em http://localhost:7522/condo
 **7. Confirme que funcionou**
 
 ```bash
-npm test                                       # 64 testes, não precisam de MySQL (mas precisam do `prisma generate`)
+npm test                                       # 99 testes, não precisam de MySQL (mas precisam do `prisma generate`)
 curl -X POST http://localhost:7522/condominio/morador/auth/login \
   -H "Content-Type: application/json" \
   -d '{"usuarioLogin":"admin","senha":"SUA_ADMIN_SENHA"}'
@@ -414,6 +417,10 @@ Abra também <http://localhost:7522/condominio/morador/docs> (Swagger).
 ### Conectando o frontend
 
 O frontend (e o gateway) chamam este serviço pelo endereço da seção [Endereços do ambiente](#endereços-do-ambiente).
+O navegador não fala direto com o serviço: o front usa a base `/condominio/gateway/morador`, e o gateway repassa
+para `/condominio/morador/*` (precisa encaminhar o header `Authorization`, os métodos `PATCH`/`DELETE` e os corpos
+de erro 400/401/403 sem alterar). Ao cadastrar moradores para testar, use **CPFs válidos** (a API confere os
+dígitos verificadores; `529.982.247-25` é um exemplo).
 Em desenvolvimento local, a base é `http://localhost:7522/condominio/morador`. Entre com o síndico criado
 pelo `ADMIN_SENHA`.
 
@@ -441,6 +448,15 @@ pelo `ADMIN_SENHA`.
 | Aviso de RabbitMQ no log | Normal sem o broker; a API continua funcionando (só os eventos não são publicados) |
 
 ---
+
+## Deploy (Jenkins)
+
+O `Jenkinsfile` da raiz faz: checkout da branch `feat/prisma-7` → `npm ci`, `prisma generate` e `npm test` (Node 24 no
+agente) → build da imagem Docker → `docker run` com os segredos injetados pelo Infisical (nenhum segredo é gravado
+em arquivo) → verificação de saúde. O Jenkins precisa da credencial **`infisical-token`** (tipo *Secret text*), com o
+token de uma Machine Identity (Token Auth, somente leitura) do projeto no Infisical; o `RABBITMQ_URL` também deve
+existir lá. A imagem (`Dockerfile`) é *multi-stage*: só o código compilado e as dependências de produção vão para a
+imagem final, que roda como usuário `node` (não root). Detalhes das variáveis em [Variáveis de ambiente](#variáveis-de-ambiente).
 
 ## Banco de dados
 
@@ -480,7 +496,8 @@ npm run test:cov    # com cobertura
 
 Rodam sem MySQL e sem RabbitMQ (Prisma e eventos são mockados), mas precisam do `npx prisma generate`. Cobrem
 login, guards e permissões por perfil, revogação de token ao desativar usuário, validações dos DTOs, CRUD de
-moradores, estado derivado das relações, eventos publicados e o JSON do Swagger.
+moradores, estado derivado das relações, eventos publicados, o JSON do Swagger, o acesso do morador apenas aos
+própios dados (LGPD), a validação de CPF e dos filtros de query (400 em vez de 500) e a criação de usuário vinculado.
 
 ## Variáveis de ambiente
 
@@ -622,7 +639,8 @@ Ver [Decisões de design](#decisões-de-design).
 
 ### Paginação
 
-Todo `GET` de listagem aceita `page` e `pageSize` (padrão `1` e `20`) e responde no formato:
+Todo `GET` de listagem aceita `page` e `pageSize` (padrão `1` e `20`). Filtros com valor inválido (ex.: `status=abc`,
+`tipo=XYZ`) retornam `400`. Resposta no formato:
 
 ```json
 {
