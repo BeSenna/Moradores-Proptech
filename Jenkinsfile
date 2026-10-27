@@ -1,6 +1,7 @@
-// Pipeline do MS Moradores (NestJS 10 + Prisma 7, Node 24) — agente Linux.
-// Segue o padrão do projeto de exemplo (ProjetoAPP): segredos no Infisical, via token de acesso do projeto
-// (Machine Identity, Token Auth) guardado no Jenkins, e deploy com `docker run`. Nenhum segredo é escrito em arquivo.
+// Pipeline do MS Moradores (NestJS 10 + Prisma 7, Node 24) — agente WINDOWS (usa bat, docker run e infisical run).
+// Para agente Linux use o JenkinsfileLinux (mesmo fluxo, com sh). Segue o padrão do projeto de exemplo (ProjetoAPP):
+// segredos no Infisical, via token de acesso do projeto (Machine Identity, Token Auth) guardado no Jenkins.
+// Nenhum segredo é escrito em arquivo.
 pipeline {
     agent any
 
@@ -26,10 +27,10 @@ pipeline {
         stage('Instalar Dependências e Testar') {
             steps {
                 // Requer Node 24 no agente (o mesmo da imagem Docker). Os testes não precisam de banco.
-                sh 'node --version'
-                sh 'npm ci'
-                sh 'npx prisma generate'
-                sh 'npm test'
+                bat 'node --version'
+                bat 'npm ci'
+                bat 'npx prisma generate'
+                bat 'npm test'
             }
         }
 
@@ -38,26 +39,19 @@ pipeline {
                 script {
                     env.IMAGE_TAG = "${env.APP_NAME}:${env.BUILD_ID}"
                 }
-                sh 'docker build -t "$IMAGE_TAG" .'
+                bat 'docker build -t %IMAGE_TAG% .'
             }
         }
 
         stage('Fazer Deploy') {
             steps {
-                sh 'docker stop "$APP_NAME" || true'
-                sh 'docker rm -v "$APP_NAME" || true'
+                bat 'docker stop %APP_NAME% || exit 0'
+                bat 'docker rm -v %APP_NAME% || exit 0'
 
                 // `infisical run` injeta os segredos só no ambiente deste comando; `-e NOME` (sem valor)
                 // repassa a variável ao container. Nada é gravado em disco e os valores não aparecem no log.
                 withCredentials([string(credentialsId: 'infisical-token', variable: 'INFISICAL_TOKEN')]) {
-                    sh '''
-                        npx -y @infisical/cli run --projectId="$INFISICAL_PROJECT_ID" --env="$INFISICAL_ENV" --path="$INFISICAL_PATH" --token="$INFISICAL_TOKEN" -- \
-                            docker run -d --name "$APP_NAME" --restart unless-stopped -p "$APP_PORT:7522" \
-                                -e PORT=7522 \
-                                -e DATABASE_URL -e JWT_SECRET -e JWT_EXPIRES_IN \
-                                -e RABBITMQ_URL -e ADMIN_LOGIN -e ADMIN_SENHA \
-                                "$IMAGE_TAG"
-                    '''
+                    bat 'npx -y @infisical/cli run --projectId=%INFISICAL_PROJECT_ID% --env=%INFISICAL_ENV% --path=%INFISICAL_PATH% --token=%INFISICAL_TOKEN% -- docker run -d --name %APP_NAME% --restart unless-stopped -p %APP_PORT%:7522 -e PORT=7522 -e DATABASE_URL -e JWT_SECRET -e JWT_EXPIRES_IN -e RABBITMQ_URL -e ADMIN_LOGIN -e ADMIN_SENHA %IMAGE_TAG%'
                 }
             }
         }
@@ -66,17 +60,7 @@ pipeline {
             steps {
                 // Falha aqui deixa o build "instável" (amarelo), sem derrubar o deploy já feito.
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    sh '''
-                        for i in $(seq 1 15); do
-                            if curl -fsS "http://localhost:$APP_PORT/condominio/morador/docs" > /dev/null; then
-                                echo "API respondendo."; exit 0
-                            fi
-                            sleep 3
-                        done
-                        echo "API não respondeu a tempo. Últimas linhas do log:"
-                        docker logs --tail 40 "$APP_NAME" || true
-                        exit 1
-                    '''
+                    bat '''powershell -NoProfile -Command "for ($i = 0; $i -lt 15; $i++) { try { Invoke-WebRequest -UseBasicParsing ('http://localhost:' + $env:APP_PORT + '/condominio/morador/docs') | Out-Null; Write-Host 'API respondendo.'; exit 0 } catch { Start-Sleep -Seconds 3 } }; Write-Host 'API nao respondeu a tempo. Ultimas linhas do log:'; docker logs --tail 40 $env:APP_NAME; exit 1"'''
                 }
             }
         }
