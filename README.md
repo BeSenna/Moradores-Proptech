@@ -445,7 +445,7 @@ pelo `ADMIN_SENHA`.
 | No Windows o container reinicia com `set: Illegal option -` ou `no such file` em `entrypoint.sh` | Final de linha CRLF. O repositório traz um `.gitattributes` que força LF; se o clone foi feito sem ele: `git rm --cached -r . && git reset --hard` (ou clone de novo) |
 | `npm install` ou `prisma generate` falha por versão do Node | O Prisma 7 exige Node 22.12+ (ou 24). Confira `node -v`; com nvm: `nvm install 24 && nvm use 24` |
 | Login do síndico retorna 401 | O síndico só é criado se `ADMIN_SENHA` tem 8+ caracteres e **ainda não existe** síndico ativo. Veja o log da API |
-| Aviso de RabbitMQ no log | Normal sem o broker; a API continua funcionando (só os eventos não são publicados) |
+| Aviso de RabbitMQ no log (`ECONNREFUSED ... :5672`) | Normal sem o broker; a API continua funcionando (só os eventos não são publicados). Para ver os eventos, siga [Vendo os eventos publicados](#vendo-os-eventos-publicados-opcional) |
 
 ---
 
@@ -678,6 +678,47 @@ O `EventsService` (`src/events/`) publica — nunca consome — três eventos:
 
 A publicação usa `emit()` (fire-and-forget) — se o RabbitMQ estiver indisponível, o
 `EventsService` apenas registra um aviso em log; a requisição HTTP não falha por isso.
+
+### Vendo os eventos publicados (opcional)
+
+Sem um RabbitMQ rodando, a API funciona normalmente, mas cada cadastro gera no log um aviso como
+`Falha ao publicar evento "morador.cadastrado" no RabbitMQ: ... ECONNREFUSED ... :5672`. Isso **não é erro**: o
+cadastro foi salvo e só o evento deixou de ser publicado. Para ver os eventos de verdade, suba um RabbitMQ local:
+
+**1. Suba só o RabbitMQ** (o `docker-compose.yml` já tem o serviço; o banco não é afetado):
+
+```bash
+docker compose up -d rabbitmq
+```
+
+**2. Aponte a API para ele.** No `.env` (ou no Infisical, se estiver usando):
+
+```env
+RABBITMQ_URL="amqp://guest:guest@localhost:5672"
+```
+
+**3. (Re)inicie a API depois que o RabbitMQ estiver no ar** — `Ctrl+C` e `npx nest start`. A API só conecta ao broker
+quando publica o primeiro evento; um evento publicado enquanto o broker estava fora do ar **é perdido** (não há reenvio).
+
+**4. Gere um evento.** No Postman ou no Swagger, cadastre um bloco, um imóvel e um morador. Cada `POST` de imóvel,
+morador e vínculo (`PROPRIETARIO` ou `INQUILINO`) publica um evento.
+
+**5. Veja a mensagem no painel do RabbitMQ.** Abra <http://localhost:15672> (usuário `guest`, senha `guest`) →
+aba **Queues and Streams** → fila **`ms_moradores_events`** → **Get messages**. Deixe *Ack Mode* em
+`Nack message requeue true` (a mensagem continua na fila) e clique em **Get Message(s)**. O corpo é assim:
+
+```json
+{ "pattern": "morador.cadastrado", "data": { "moradorId": 7, "moradorNome": "Ana Beatriz Souza", "moradorStatus": 1 } }
+```
+
+O campo `pattern` é o nome do evento e `data` é o conteúdo. A fila é `durable` e as mensagens são persistentes: ficam
+guardadas até alguém consumir (os outros microsserviços ainda vão consumir, então por enquanto elas só se acumulam;
+**Purge Messages** limpa a fila).
+
+**6. Quando terminar**, pare o broker com `docker compose stop rabbitmq` (ou `docker compose down` para removê-lo).
+
+> O endereço para a API rodando **dentro** do Docker Compose (`docker compose up` sem `--no-deps`) é `amqp://guest:guest@rabbitmq:5672`
+> (o nome do serviço, não `localhost`) — o compose já usa esse valor quando o `RABBITMQ_URL` não está definido.
 
 ## Decisões de design
 
