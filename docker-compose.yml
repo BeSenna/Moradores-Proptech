@@ -5,6 +5,9 @@
 #   npx infisical run --env=dev -- docker compose up --build
 # Sem Infisical: crie um .env ao lado deste arquivo com as mesmas variáveis e rode  docker compose up --build
 #
+# No servidor (Jenkins): o pipeline grava os segredos do Infisical num .env temporário e sobe SÓ a API
+# (docker compose up -d --no-deps api). Se o RABBITMQ_URL existir no Infisical, ele vale no lugar do broker local abaixo.
+#
 # API:      http://localhost:7522/condominio/morador        Swagger: http://localhost:7522/condominio/morador/docs
 # RabbitMQ: http://localhost:15672 (guest / guest)
 # As tabelas já existem no servidor (criadas pelo professor); o síndico inicial é criado pela própria API (ADMIN_LOGIN/ADMIN_SENHA).
@@ -23,6 +26,7 @@ services:
 
   api:
     build: .
+    container_name: moradores-proptech
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -33,7 +37,7 @@ services:
       PORT: 7522
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (Infisical ou .env)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
       ADMIN_SENHA: ${ADMIN_SENHA:-}
     restart: unless-stopped

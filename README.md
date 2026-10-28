@@ -451,12 +451,26 @@ pelo `ADMIN_SENHA`.
 
 ## Deploy (Jenkins)
 
-O `Jenkinsfile` da raiz faz: checkout da branch `feat/prisma-7` → `npm ci`, `prisma generate` e `npm test` (Node 24 no
-agente) → build da imagem Docker → `docker run` com os segredos injetados pelo Infisical (nenhum segredo é gravado
-em arquivo) → verificação de saúde. O Jenkins precisa da credencial **`infisical-token`** (tipo *Secret text*), com o
-token de uma Machine Identity (Token Auth, somente leitura) do projeto no Infisical; o `RABBITMQ_URL` também deve
-existir lá. A imagem (`Dockerfile`) é *multi-stage*: só o código compilado e as dependências de produção vão para a
-imagem final, que roda como usuário `node` (não root). Detalhes das variáveis em [Variáveis de ambiente](#variáveis-de-ambiente).
+Seguindo o padrão do projeto HemoVida-estoque, o repositório tem dois pipelines com o mesmo fluxo:
+**`JenkinsfileLinux`** (agente Linux, `sh` — é o usado no servidor) e **`Jenkinsfile`** (agente Windows, `bat`).
+O "Script Path" do job precisa apontar para o arquivo certo. Fluxo:
+
+1. checkout da branch `feat/prisma-7`;
+2. busca os segredos no Infisical (`infisical export`, ambiente `dev`, pasta `/`) com o token guardado no Jenkins
+   na credencial **`tokenbernardocondominio`** (tipo *Secret text*; Machine Identity com Token Auth, somente leitura),
+   grava um `.env` temporário e remove as aspas dos valores (`sed`);
+3. `docker compose config` → `docker compose build api` → `docker compose up -d --no-deps --force-recreate api`
+   (sobe só a API; o RabbitMQ do compose é para uso local e, no servidor, vale o `RABBITMQ_URL` do Infisical);
+4. confere se o container `moradores-proptech` está rodando e se `/condominio/morador/docs` responde;
+5. no fim (`post/always`) apaga o `.env`, então nenhum segredo fica no disco do Jenkins.
+
+No `Jenkinsfile` (Windows) os segredos não viram arquivo: o `infisical run` os injeta direto no processo do
+`docker compose`. A imagem (`Dockerfile`) é *multi-stage*: só o código compilado e as dependências de produção vão
+para a imagem final, que roda como usuário `node` (não root).
+
+**Trocou a senha do banco?** Ela fica só no segredo `DATABASE_URL` do Infisical (ambiente `dev`) — atualize lá (com
+a senha codificada: `@` → `%40`, `#` → `%23`, `/` → `%2F`, `$` → `%24`) e rode o job de novo para recriar o container.
+Quem roda localmente também atualiza o próprio `.env`. Nenhum arquivo do repositório guarda a senha.
 
 ## Banco de dados
 
