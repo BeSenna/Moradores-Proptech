@@ -767,3 +767,18 @@ guardadas até alguém consumir (os outros microsserviços ainda vão consumir, 
 O síndico inicial é criado automaticamente na primeira subida, com o `ADMIN_LOGIN` (padrão `admin`) e a
 `ADMIN_SENHA` definidos no Infisical (ou no `.env`). A senha **não** é documentada aqui. Os moradores comuns
 são cadastrados depois pelo síndico (`POST /condominio/morador/usuario`).
+
+
+## Acesso do dia a dia
+
+npx infisical run --env=dev -- docker compose up --build
+
+## Primeiro acesso
+
+git clone https://github.com/BeSenna/Moradores-Proptech.git
+cd Moradores-Proptech
+npm install                  # só para trazer o CLI do Infisical (@infisical/cli)
+npx infisical login          # uma vez
+npx infisical run --env=dev -- docker compose up --build
+
+
