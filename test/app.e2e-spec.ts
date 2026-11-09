@@ -421,6 +421,8 @@ describe('MS Moradores (e2e)', () => {
       );
       expect(ops).toBe(30);
       expect(res.body.components.securitySchemes.JWT).toBeDefined();
+      // a própria página explica quando ela fica disponível
+      expect(res.body.info.description).toContain('SWAGGER_ENABLED=true');
     });
   });
 });
