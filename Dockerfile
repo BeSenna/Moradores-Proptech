@@ -44,5 +44,10 @@ COPY --from=build --chown=node:node /app/docker ./docker
 USER node
 EXPOSE 7522
 
+# Docker passa a marcar o container como "healthy"/"unhealthy" consultando GET /health (API + banco).
+# A imagem não tem curl/wget, então a checagem usa o fetch do próprio Node.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||7522)+'/condominio/morador/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # sobe a API (que cria o síndico inicial, se preciso); o schema do banco é criado pelo professor
 CMD ["sh", "docker/entrypoint.sh"]

@@ -361,8 +361,57 @@ describe('MS Moradores (e2e)', () => {
     });
   });
 
+  describe('health check', () => {
+    it('GET /health é público e responde Healthy quando o banco responde', async () => {
+      const res = await request(app.getHttpServer()).get('/condominio/morador/health').expect(200);
+      expect(res.body).toEqual({ status: 'Healthy', checks: { api: 'up', database: 'up' } });
+    });
+
+    it('responde 503 Unhealthy quando o banco não responde', async () => {
+      prisma.$queryRaw.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      const res = await request(app.getHttpServer()).get('/condominio/morador/health').expect(503);
+      expect(res.body).toEqual({ status: 'Unhealthy', checks: { api: 'up', database: 'down' } });
+    });
+  });
+
+  describe('política de senha das contas', () => {
+    const base = '/condominio/morador/usuario';
+    const sindico = () => bearer(tokenDe(SINDICO, 'SINDICO'));
+
+    it.each([
+      ['curta demais', 'Ab1!', 'entre 8 e 16'],
+      ['sem maiúscula', 'senha@1234', 'maiúscula'],
+      ['sem número', 'Senha@abcd', 'número'],
+      ['sem caractere especial', 'Senha12345', 'especial'],
+      ['longa demais', 'Aa1!aaaaaaaaaaaaa', 'entre 8 e 16'],
+    ])('POST /usuario recusa senha %s → 400 dizendo o que falta', async (_nome, senha, trecho) => {
+      const res = await request(app.getHttpServer())
+        .post(base).set(sindico()).send({ usuarioLogin: 'novo', senha, usuarioPerfil: 'MORADOR' }).expect(400);
+      expect(JSON.stringify(res.body.message)).toContain(trecho);
+      expect(prisma.usuario.create).not.toHaveBeenCalled();
+    });
+
+    it('PATCH /usuario/:id/senha recusa senha fraca → 400', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`${base}/${MORADOR}/senha`).set(sindico()).send({ novaSenha: 'senhafraca' }).expect(400);
+      expect(JSON.stringify(res.body.message)).toContain('maiúscula');
+    });
+
+    it('POST /usuario aceita senha dentro da política', async () => {
+      prisma.usuario.create.mockResolvedValue({ usuarioId: 9, usuarioLogin: 'novo', usuarioPerfil: 'MORADOR', usuarioStatus: 1 });
+      await request(app.getHttpServer())
+        .post(base).set(sindico()).send({ usuarioLogin: 'novo', senha: 'Senha@1234', usuarioPerfil: 'MORADOR' }).expect(201);
+      expect(prisma.usuario.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('o login continua aceitando contas antigas com senha que não segue a política', async () => {
+      await request(app.getHttpServer())
+        .post('/condominio/morador/auth/login').send({ usuarioLogin: 'ana', senha: 'senha1234' }).expect(201);
+    });
+  });
+
   describe('Swagger', () => {
-    it('serve a UI e o JSON com as 29 operações', async () => {
+    it('serve a UI e o JSON com as 30 operações', async () => {
       await request(app.getHttpServer()).get('/condominio/morador/docs').expect(200);
 
       const res = await request(app.getHttpServer()).get('/condominio/morador/docs-json').expect(200);
@@ -370,7 +419,7 @@ describe('MS Moradores (e2e)', () => {
         (soma: number, rota: any) => soma + Object.keys(rota).length,
         0,
       );
-      expect(ops).toBe(29);
+      expect(ops).toBe(30);
       expect(res.body.components.securitySchemes.JWT).toBeDefined();
     });
   });

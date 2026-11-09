@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { createPrismaMock } from '../../test/helpers/prisma-mock';
 import { AuthService } from './auth.service';
@@ -75,5 +75,49 @@ describe('AuthService.login', () => {
     await expect(service.login({ usuarioLogin: 'ana', senha: 'senha1234' })).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+  describe('logs de login (quem, o quê, de onde — nunca a senha)', () => {
+    let log: jest.SpyInstance;
+    let warn: jest.SpyInstance;
+
+    beforeEach(() => {
+      log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+      warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    });
+    afterEach(() => jest.restoreAllMocks());
+
+    it('registra o login realizado com usuário, perfil e IP', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(usuario);
+      prisma.moradorImovel.findFirst.mockResolvedValue({ moradorId: 7 });
+
+      await service.login({ usuarioLogin: 'ana', senha: 'senha1234' }, '192.168.0.12');
+
+      expect(log).toHaveBeenCalledWith('Login realizado | usuario=ana | id=42 | perfil=MORADOR | ip=192.168.0.12');
+    });
+
+    it('registra a falha por senha incorreta, sem gravar a senha digitada', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(usuario);
+
+      await expect(service.login({ usuarioLogin: 'ana', senha: 'SenhaErrada@1' }, '10.0.0.7')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      const linha = warn.mock.calls[0][0] as string;
+      expect(linha).toBe('Falha de login | usuario=ana | motivo=senha incorreta | ip=10.0.0.7');
+      expect(linha).not.toContain('SenhaErrada');
+    });
+
+    it('registra a falha de usuário inexistente e não deixa o login forjar linhas de log', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(null);
+
+      await expect(service.login({ usuarioLogin: 'x\nLogin realizado | usuario=admin', senha: 'qualquer1!' })).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      const linha = warn.mock.calls[0][0] as string;
+      expect(linha).not.toContain('\n');
+      expect(linha).toContain('motivo=usuário inexistente ou inativo');
+      expect(linha).toContain('ip=-');
+    });
   });
 });

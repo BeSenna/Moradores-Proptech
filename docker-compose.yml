@@ -40,4 +40,6 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
       ADMIN_SENHA: ${ADMIN_SENHA:-}
+      # Swagger fica DESLIGADO na imagem (NODE_ENV=production). Para ligar: SWAGGER_ENABLED=true (Infisical ou .env)
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-}
     restart: unless-stopped

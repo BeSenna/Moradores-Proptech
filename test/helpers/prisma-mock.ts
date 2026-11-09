@@ -16,6 +16,7 @@ export function createPrismaMock() {
     morador: model(),
     usuario: model(),
     moradorImovel: model(),
+    $queryRaw: jest.fn().mockResolvedValue([{ 1: 1 }]),
     $connect: jest.fn(),
     $disconnect: jest.fn(),
   };

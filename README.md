@@ -25,6 +25,7 @@ têm bancos próprios e consultam este serviço via HTTP para validar `imovel_id
 - [Variáveis de ambiente](#variáveis-de-ambiente)
 - [Referência da API](#referência-da-api)
 - [Eventos RabbitMQ](#eventos-rabbitmq)
+- [Hardening e observabilidade](#hardening-e-observabilidade)
 - [Decisões de design](#decisões-de-design)
 - [Limitações conhecidas e próximos passos](#limitações-conhecidas-e-próximos-passos)
 
@@ -40,7 +41,7 @@ têm bancos próprios e consultam este serviço via HTTP para validar `imovel_id
 | Banco de dados (MySQL 5.7) | — | `edumysql.acesso.rj.senac.br:3306` (banco `20262m_prj5_condominio_morador`) |
 
 O servidor repassa as requisições **mantendo** o caminho `/condominio/morador`, por isso a API usa esse prefixo
-em todas as rotas. Exemplos: `POST /condominio/morador/auth/login` e o Swagger em `/condominio/morador/docs`.
+em todas as rotas. Exemplos: `POST /condominio/morador/auth/login` e o Swagger em `/condominio/morador/docs` (desligado em produção por padrão: veja [Hardening e observabilidade](#hardening-e-observabilidade)).
 
 ## Stack técnica
 
@@ -166,7 +167,7 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
 
 | Operação | Quem pode |
 |---|---|
-| `POST /condominio/morador/auth/login` | qualquer um (rota pública) |
+| `POST /condominio/morador/auth/login` e `GET /condominio/morador/health` | qualquer um (rotas públicas) |
 | `GET` de bloco e de imóvel (lista e detalhe) | qualquer usuário autenticado (no detalhe do imóvel, o `MORADOR` não vê CPF/e-mail/telefone dos moradores vinculados) |
 | `GET` da **lista** de moradores e da **lista** de relações | só `SINDICO` (dados pessoais — LGPD) |
 | `GET /morador/:id` e `GET /morador-imovel/:id` | `SINDICO` (qualquer registro) ou o próprio morador (`moradorId` do token); outro morador recebe `403` |
@@ -192,7 +193,10 @@ ms-moradores/
 │   ├── generated/prisma/       # Prisma Client GERADO (não versionado: rode `npx prisma generate`)
 │   ├── prisma/                 # PrismaService (client + adapter MariaDB) — módulo @Global
 │   ├── events/                 # EventsService — publica no RabbitMQ
+│   ├── health/                 # GET /health (API + banco), usado pelo Docker e pelo Jenkins
 │   ├── common/filters/         # filtro global de exceções do Prisma
+│   ├── common/logging/         # log de acesso (quem/o quê/de onde) e IP do cliente
+│   ├── common/validators/      # validadores próprios: CPF e política de senha
 │   │
 │   ├── auth/
 │   │   ├── auth.controller.ts  # POST /auth/login, GET /auth/me
@@ -254,7 +258,8 @@ Elas ficam no **Infisical** (ambiente `dev`) e **nunca no Git**:
 |---|---|---|
 | `DATABASE_URL` | sim | `mysql://<usuario>:<senha>@edumysql.acesso.rj.senac.br:3306/20262m_prj5_condominio_morador` — senha com `@`, `#`, `/` etc. precisa ser codificada (`@` → `%40`) |
 | `JWT_SECRET` | sim | texto longo e aleatório |
-| `ADMIN_SENHA` | recomendada | senha (8+ caracteres) do síndico inicial; sem ela nenhum síndico é criado e não há como fazer login |
+| `ADMIN_SENHA` | recomendada | senha do síndico inicial (mínimo 8 caracteres; o ideal é seguir a [política de senha](#política-de-senha): 8 a 16, com maiúscula, minúscula, número e caractere especial). Sem ela nenhum síndico é criado e não há como fazer login |
+| `SWAGGER_ENABLED` | não | `true` liga o Swagger (a imagem Docker sobe com ele **desligado**); veja [Hardening e observabilidade](#hardening-e-observabilidade) |
 
 Quem não tem acesso ao Infisical cria um arquivo `.env` na raiz com as mesmas variáveis (modelo em `.env.example`).
 
@@ -297,7 +302,7 @@ npx infisical login          # abre o navegador; use a conta convidada para o pr
 ```env
 DATABASE_URL="mysql://<usuario>:<senha>@edumysql.acesso.rj.senac.br:3306/20262m_prj5_condominio_morador"
 JWT_SECRET="um-segredo-longo-e-aleatorio"
-ADMIN_SENHA="uma-senha-forte-com-8-ou-mais-caracteres"
+ADMIN_SENHA="Uma-senha-forte-1"
 ```
 
 O compose **se recusa a subir** sem `DATABASE_URL` e `JWT_SECRET` (aparece `required variable ... is missing a value`).
@@ -315,7 +320,8 @@ Deixe o terminal aberto (ou acrescente `-d` para rodar em segundo plano).
 
 **5. Confirme que funcionou**
 
-- Swagger (documentação interativa): <http://localhost:7522/condominio/morador/docs>
+- Health check: <http://localhost:7522/condominio/morador/health> (deve responder `{"status":"Healthy",...}`)
+- Swagger (documentação interativa): <http://localhost:7522/condominio/morador/docs> — a imagem Docker sobe com o Swagger **desligado**; para ligar, defina `SWAGGER_ENABLED=true` (Infisical ou `.env`)
 - Login:
   ```bash
   curl -X POST http://localhost:7522/condominio/morador/auth/login \
@@ -406,13 +412,13 @@ Está no ar quando aparecer `MS Moradores rodando em http://localhost:7522/condo
 **7. Confirme que funcionou**
 
 ```bash
-npm test                                       # 99 testes, não precisam de MySQL (mas precisam do `prisma generate`)
+npm test                                       # ~140 testes, não precisam de MySQL (mas precisam do `prisma generate`)
 curl -X POST http://localhost:7522/condominio/morador/auth/login \
   -H "Content-Type: application/json" \
   -d '{"usuarioLogin":"admin","senha":"SUA_ADMIN_SENHA"}'
 ```
 
-Abra também <http://localhost:7522/condominio/morador/docs> (Swagger).
+Abra também <http://localhost:7522/condominio/morador/health> e <http://localhost:7522/condominio/morador/docs> (Swagger; fora de produção ele já vem ligado).
 
 ### Conectando o frontend
 
@@ -444,6 +450,9 @@ pelo `ADMIN_SENHA`.
 | Docker Desktop não inicia no Windows | Habilite a virtualização na BIOS e o WSL 2 (`wsl --install` no PowerShell como administrador) e reinicie |
 | No Windows o container reinicia com `set: Illegal option -` ou `no such file` em `entrypoint.sh` | Final de linha CRLF. O repositório traz um `.gitattributes` que força LF; se o clone foi feito sem ele: `git rm --cached -r . && git reset --hard` (ou clone de novo) |
 | `npm install` ou `prisma generate` falha por versão do Node | O Prisma 7 exige Node 22.12+ (ou 24). Confira `node -v`; com nvm: `nvm install 24 && nvm use 24` |
+| `404` em `/condominio/morador/docs` | O Swagger está desligado (imagem Docker/produção). Defina `SWAGGER_ENABLED=true` e reinicie |
+| `docker ps` mostra o container `unhealthy` | O `HEALTHCHECK` consulta `/health` e o banco não respondeu. Veja o log (`Health check falhou: ...`) e confira VPN/rede e a `DATABASE_URL` |
+| `400` ao criar usuário ou trocar a senha, com mensagem sobre a senha | A senha não segue a [política](#política-de-senha) (8 a 16 caracteres, maiúscula, minúscula, número e caractere especial) |
 | Login do síndico retorna 401 | O síndico só é criado se `ADMIN_SENHA` tem 8+ caracteres e **ainda não existe** síndico ativo. Veja o log da API |
 | Aviso de RabbitMQ no log (`ECONNREFUSED ... :5672`) | Normal sem o broker; a API continua funcionando (só os eventos não são publicados). Para ver os eventos, siga [Vendo os eventos publicados](#vendo-os-eventos-publicados-opcional) |
 
@@ -461,7 +470,7 @@ O "Script Path" do job precisa apontar para o arquivo certo. Fluxo:
    grava um `.env` temporário e remove as aspas dos valores (`sed`);
 3. `docker compose config` → `docker compose build api` → `docker compose up -d --no-deps --force-recreate api`
    (sobe só a API; o RabbitMQ do compose é para uso local e, no servidor, vale o `RABBITMQ_URL` do Infisical);
-4. confere se o container `moradores-proptech` está rodando e se `/condominio/morador/docs` responde;
+4. confere se o container `moradores-proptech` está rodando e se `/condominio/morador/health` responde (API **e** banco; o Swagger não é mais usado para isso, pois fica desligado em produção);
 5. no fim (`post/always`) apaga o `.env`, então nenhum segredo fica no disco do Jenkins.
 
 No `Jenkinsfile` (Windows) os segredos não viram arquivo: o `infisical run` os injeta direto no processo do
@@ -496,7 +505,7 @@ O schema (`prisma/schema.prisma`) espelha o banco `condominio_moradores`. As tab
 
 Criar um `usuario` exige já estar logado como síndico. Para resolver isso, ao subir, a API cria sozinha o
 primeiro síndico **se não existir nenhum síndico ativo**, usando `ADMIN_LOGIN` (padrão `admin`) e
-`ADMIN_SENHA` (mínimo 8 caracteres). Sem `ADMIN_SENHA`, nada é criado e um aviso aparece no log. Depois do
+`ADMIN_SENHA` (mínimo 8 caracteres; se não seguir a [política de senha](#política-de-senha), a conta é criada mesmo assim e um aviso aparece no log). Sem `ADMIN_SENHA`, nada é criado e um aviso aparece no log. Depois do
 primeiro start a rotina não faz mais nada. Troque a senha em `PATCH /condominio/morador/usuario/:id/senha`.
 Os moradores comuns são criados depois, pelo síndico, em `POST /condominio/morador/usuario`; as senhas ficam no
 banco só como hash.
@@ -523,12 +532,19 @@ própios dados (LGPD), a validação de CPF e dos filtros de query (400 em vez d
 | `JWT_EXPIRES_IN` | Validade do token (padrão `8h`) |
 | `RABBITMQ_URL` | URL de conexão do broker de eventos |
 | `ADMIN_LOGIN` | Login do síndico inicial criado automaticamente (padrão `admin`) |
-| `ADMIN_SENHA` | Senha do síndico inicial (mín. 8 caracteres). Sem ela, o síndico inicial não é criado |
+| `ADMIN_SENHA` | Senha do síndico inicial (mín. 8 caracteres; o ideal é seguir a [política de senha](#política-de-senha)). Sem ela, o síndico inicial não é criado |
+| `SWAGGER_ENABLED` | `true` liga o Swagger, `false` desliga. Vazio: ligado fora de produção e **desligado** em produção (`NODE_ENV=production`, o caso da imagem Docker) |
 
 ## Referência da API
 
 Todas as rotas abaixo têm o prefixo `/condominio/morador` (ex.: `/auth/login` = `/condominio/morador/auth/login`). 🔒 = exige `Authorization: Bearer`.
 👑 = exige, além do token, perfil `SINDICO`.
+
+### Saúde
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `GET` | `/health` | público | `200 {"status":"Healthy","checks":{"api":"up","database":"up"}}`; `503` com `status: "Unhealthy"` se o banco não responder em 3 s. Não revela detalhes do erro |
 
 ### Auth
 
@@ -595,11 +611,11 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| `POST` | `/usuario` | 👑 | Cria uma conta (`senha` em texto puro no corpo, vira hash) |
+| `POST` | `/usuario` | 👑 | Cria uma conta (`senha` em texto puro no corpo, vira hash; precisa seguir a [política de senha](#política-de-senha)) |
 | `GET` | `/usuario?perfil=` | 👑 | Lista paginada — nunca retorna o hash da senha |
 | `GET` | `/usuario/:id` | 👑 | Detalhe |
 | `PATCH` | `/usuario/:id` | 👑 | Edição (não troca senha por aqui) |
-| `PATCH` | `/usuario/:id/senha` | 👑 | Troca de senha (`{ novaSenha }`) |
+| `PATCH` | `/usuario/:id/senha` | 👑 | Troca de senha (`{ novaSenha }`, mesma política de senha) |
 | `DELETE` | `/usuario/:id` | 👑 | Revoga o acesso (`usuario_status = 0`) |
 
 <details>
@@ -608,7 +624,7 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 ```json
 {
   "usuarioLogin": "ana.souza",
-  "senha": "minhasenha123",
+  "senha": "Senha@1234",
   "usuarioPerfil": "MORADOR",
   "moradorImovelId": 15
 }
@@ -720,6 +736,74 @@ guardadas até alguém consumir (os outros microsserviços ainda vão consumir, 
 > O endereço para a API rodando **dentro** do Docker Compose (`docker compose up` sem `--no-deps`) é `amqp://guest:guest@rabbitmq:5672`
 > (o nome do serviço, não `localhost`) — o compose já usa esse valor quando o `RABBITMQ_URL` não está definido.
 
+## Hardening e observabilidade
+
+Medidas para a aplicação entrar em produção, seguindo o material da disciplina (Hardening e Observabilidade).
+
+### Hardening — o que já está aplicado
+
+| Medida | Como está no projeto |
+|---|---|
+| Credenciais fora do código | `DATABASE_URL`, `JWT_SECRET`, `ADMIN_SENHA` vêm do Infisical (ou `.env`, que não vai para o Git); a API não sobe sem `JWT_SECRET` |
+| JWT com expiração | `JWT_EXPIRES_IN` (padrão `8h`); além disso, conta desativada perde o acesso na hora |
+| Validação de entrada | `ValidationPipe` com `whitelist` e `forbidNonWhitelisted`; filtros de query inválidos viram `400` |
+| Autorização no servidor | `JwtAuthGuard` + `RolesGuard` em todas as rotas, e o morador só lê os próprios dados (LGPD) |
+| Senha nunca em texto puro | hash bcrypt; o hash nunca sai nas respostas |
+| Política de senha | veja abaixo |
+| Swagger desligado em produção | veja abaixo |
+| Docker | imagem oficial `node`, build em duas etapas, só dependências de produção, usuário `node` (não root), `HEALTHCHECK` |
+| Health check | `GET /health`, usado pelo `HEALTHCHECK` da imagem e pelo Jenkins |
+
+#### Política de senha
+
+Vale para criar usuário (`POST /usuario`) e trocar senha (`PATCH /usuario/:id/senha`): **de 8 a 16 caracteres, com letra maiúscula,
+minúscula, número e caractere especial**. Fora disso a API responde `400` dizendo qual requisito falta. O frontend aplica a
+mesma regra (`src/lib/senha.ts`), mas quem garante é o backend. O **login não valida** a política, então contas criadas antes dela continuam
+entrando. A `ADMIN_SENHA` do síndico inicial só gera um aviso no log se estiver fora da política.
+
+#### Swagger por ambiente
+
+O Swagger (`/condominio/morador/docs`) expõe toda a API publicamente, então em produção ele fica **desligado por padrão**:
+
+| `SWAGGER_ENABLED` | `NODE_ENV` | Swagger |
+|---|---|---|
+| `true` | qualquer | ligado |
+| `false` | qualquer | desligado |
+| vazio | `production` (imagem Docker, servidor) | **desligado** |
+| vazio | outro (`npm run start:dev`, testes) | ligado |
+
+Para uma demonstração no servidor, defina `SWAGGER_ENABLED=true` no Infisical e recrie o container (rode o job de novo); depois remova.
+
+### Health check
+
+`GET /condominio/morador/health` (público, sem token) confere se a API está de pé e se o banco responde a um `SELECT 1`:
+
+```json
+{ "status": "Healthy", "checks": { "api": "up", "database": "up" } }
+```
+
+Se o banco não responder em 3 s, a resposta é `503` com `"status": "Unhealthy"` e `"database": "down"`; o motivo (sem expor host, usuário ou senha)
+vai só para o log. O RabbitMQ não entra na checagem: sem ele a API continua atendendo. O `Dockerfile` usa essa rota no
+`HEALTHCHECK` (`docker ps` mostra `healthy`/`unhealthy`) e o Jenkins a consulta no fim do deploy.
+
+### Logs
+
+O Nest registra cada linha com data/hora e nível. O projeto acrescenta duas coisas, sempre respondendo **quem, o quê, quando e de onde**:
+
+```
+[Nest] 530 - 11/09/2026, 4:22:02 PM  WARN [AuthService] Falha de login | usuario=admin | motivo=senha incorreta | ip=10.136.38.50
+[Nest] 530 - 11/09/2026, 4:22:02 PM   LOG [AuthService] Login realizado | usuario=admin | id=1 | perfil=SINDICO | ip=200.10.20.30
+[Nest] 530 - 11/09/2026, 4:22:03 PM   LOG [HTTP] POST /condominio/morador/usuario 201 100ms | usuario=1 | ip=200.10.20.30
+```
+
+- **Login:** sucesso (`LOG`) e falha (`WARN`, com o motivo), com o IP.
+- **Acesso:** uma linha por requisição, com método, rota, status, duração, id do usuário do token e IP. Níveis: `LOG` (2xx/3xx), `WARN` (4xx), `ERROR` (5xx).
+- **IP:** atrás do gateway vale o primeiro endereço de `X-Forwarded-For`; serve só para log (o cabeçalho pode ser forjado), nunca para decisão de segurança.
+- **Nunca é registrado:** senha, token, corpo e cabeçalhos da requisição, nem a query string (a busca pode conter CPF). O `/health` e os arquivos do Swagger também ficam de fora.
+- **Falhas de infraestrutura** (banco, RabbitMQ, health check) saem como `ERROR`/`WARN` pelos serviços respectivos.
+
+No servidor, veja com `docker logs -f moradores-proptech`. O formato é de texto simples; integrar a uma ferramenta de logs (Seq, Elastic) ou de métricas (Prometheus, Grafana) fica como próximo passo.
+
 ## Decisões de design
 
 - **Soft-delete em tudo.** Todo `DELETE` muda a coluna `*_status` para `0` em vez
@@ -761,6 +845,10 @@ guardadas até alguém consumir (os outros microsserviços ainda vão consumir, 
   é uma suíte de integração contra um MySQL descartável (ex.: Testcontainers).
 - Trocar a senha de um usuário (`PATCH /usuario/:id/senha`) ainda não invalida os
   tokens já emitidos dele — apenas desativar a conta faz isso.
+- Ainda **não** aplicados do material de Hardening: `enableCors()` está aberto para qualquer origem (o frontend usa o
+  gateway, na mesma origem, então dá para restringir por variável de ambiente); o login não tem limite de tentativas;
+  o filtro de erros do Prisma devolve a mensagem do Prisma ao cliente; e o `npm audit` aponta vulnerabilidades em
+  dependências de produção (`mysql2`, `qs`) que dependem de atualização de versões.
 
 ## Acesso inicial
 

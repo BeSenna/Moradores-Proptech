@@ -326,10 +326,11 @@ const moradorCreate = obj(
 const usuarioCreate = obj(
   {
     usuarioLogin: str('ana.souza', 'Único', { maxLength: 100 }),
-    senha: str('minhasenha123', 'Texto puro, mínimo 8 caracteres — o serviço grava apenas o hash (bcrypt)', {
-      minLength: 8,
-      format: 'password',
-    }),
+    senha: str(
+      'Senha@1234',
+      'Texto puro — o serviço grava apenas o hash (bcrypt). De 8 a 16 caracteres, com letra maiúscula, minúscula, número e caractere especial',
+      { minLength: 8, maxLength: 16, format: 'password' },
+    ),
     usuarioPerfil: { ...PERFIL, description: 'Padrão MORADOR' },
     usuarioStatus: flag('Padrão 1 (ativo)'),
     moradorImovelId: int(15, 'Opcional: já vincula esta conta a uma relação morador_imovel existente'),
@@ -415,9 +416,16 @@ const schemas: Record<string, any> = {
   Usuario: obj(usuarioBase),
   UsuarioCreate: usuarioCreate,
   UsuarioUpdate: partial(usuarioCreate, ['senha']),
-  TrocaSenha: obj({ novaSenha: str('novaSenha456', 'Mínimo 8 caracteres', { minLength: 8, format: 'password' }) }, [
-    'novaSenha',
-  ]),
+  TrocaSenha: obj(
+    {
+      novaSenha: str(
+        'NovaSenha@456',
+        'De 8 a 16 caracteres, com letra maiúscula, minúscula, número e caractere especial',
+        { minLength: 8, maxLength: 16, format: 'password' },
+      ),
+    },
+    ['novaSenha'],
+  ),
 
   MoradorImovel: obj(relBase),
   MoradorImovelLista: obj({
@@ -477,6 +485,18 @@ const paths: Record<string, any> = {
         ref('TokenPayload'),
         { sub: 42, usuarioId: 42, moradorId: 7, usuarioPerfil: 'MORADOR', iat: 1760000000, exp: 1760028800 },
       ],
+    }),
+  },
+
+  '/health': {
+    get: op({
+      tag: 'Saúde',
+      summary: 'Health check',
+      description:
+        'Informa se a API está de pé e conseguindo falar com o banco. Usado pelo Docker (`HEALTHCHECK`) e pelo Jenkins. Responde `503` com `status: "Unhealthy"` quando o banco não responde.',
+      public: true,
+      ok: [200, 'Saudável', obj({ status: str('Healthy'), checks: obj({ api: str('up'), database: str('up') }) }), { status: 'Healthy', checks: { api: 'up', database: 'up' } }],
+      errors: [[503, 'Banco de dados indisponível.']],
     }),
   },
 
@@ -770,7 +790,7 @@ const paths: Record<string, any> = {
       sindico: true,
       requestBody: body('UsuarioCreate', {
         usuarioLogin: 'ana.souza',
-        senha: 'minhasenha123',
+        senha: 'Senha@1234',
         usuarioPerfil: 'MORADOR',
         moradorImovelId: 15,
       }),
@@ -822,7 +842,7 @@ const paths: Record<string, any> = {
       description: 'Grava o hash bcrypt da nova senha.',
       sindico: true,
       parameters: [idParam('usuário', 42)],
-      requestBody: body('TrocaSenha', { novaSenha: 'novaSenha456' }),
+      requestBody: body('TrocaSenha', { novaSenha: 'NovaSenha@456' }),
       ok: [200, 'Senha alterada', ref('Usuario'), EX_USUARIO],
       errors: [[404, 'Usuário #99 não encontrado.']],
     }),
@@ -853,6 +873,7 @@ const document: OpenAPIObject = {
   },
   servers: [{ url: `/${PREFIXO_API}`, description: 'MS Moradores' }],
   tags: [
+    { name: 'Saúde', description: 'Health check da API e do banco' },
     { name: 'Autenticação', description: 'Login e verificação do token JWT' },
     { name: 'Bloco', description: 'Blocos (torres) do condomínio' },
     { name: 'Imóvel', description: 'Apartamentos e coberturas' },
@@ -869,7 +890,19 @@ const document: OpenAPIObject = {
   },
 } as any;
 
+// O Swagger expõe toda a API publicamente, então em produção ele fica DESLIGADO por padrão.
+//   SWAGGER_ENABLED=true   liga em qualquer ambiente (ex.: para uma demonstração)
+//   SWAGGER_ENABLED=false  desliga em qualquer ambiente
+//   sem a variável         ligado, exceto quando NODE_ENV=production (é o caso da imagem Docker)
+export function swaggerHabilitado(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = env.SWAGGER_ENABLED?.trim().toLowerCase();
+  if (v === 'true' || v === '1') return true;
+  if (v === 'false' || v === '0') return false;
+  return env.NODE_ENV !== 'production';
+}
+
 export function setupSwagger(app: INestApplication) {
+  if (!swaggerHabilitado()) return;
   SwaggerModule.setup(`${PREFIXO_API}/docs`, app, document, {
     customSiteTitle: 'MS Moradores — API',
     swaggerOptions: { persistAuthorization: true },

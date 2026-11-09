@@ -1,12 +1,14 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { validarSenha } from '../common/validators/senha-forte';
 
 // Cria automaticamente o primeiro SINDICO quando o sistema sobe sem nenhum síndico ativo.
 // Resolve o "ovo e a galinha" de criar usuários (que exige estar logado como síndico).
 //
 //   ADMIN_LOGIN  — login do síndico inicial (padrão: admin)
-//   ADMIN_SENHA  — senha inicial (mín. 8 caracteres). Sem ela, nada é criado.
+//   ADMIN_SENHA  — senha inicial (mín. 8 caracteres; o ideal é seguir a política: 8 a 16, maiúscula, minúscula, número e especial).
+//                  Sem ela, nada é criado.
 //
 // Só age se NÃO existir síndico ativo; depois do primeiro start não faz mais nada.
 // Nunca derruba a API: qualquer falha (ex.: tabelas ainda não criadas) vira só um log.
@@ -32,6 +34,13 @@ export class AdminBootstrapService implements OnApplicationBootstrap {
             'defina ADMIN_LOGIN/ADMIN_SENHA no .env para criar o síndico inicial automaticamente.',
         );
         return;
+      }
+
+      // Não bloqueia (um deploy já configurado com uma ADMIN_SENHA mais simples continuaria subindo),
+      // mas avisa: as contas criadas pela API seguem a política de senha (8 a 16, maiúscula, minúscula, número, especial).
+      const fora = validarSenha(senha);
+      if (fora) {
+        this.logger.warn(`ADMIN_SENHA fora da política de senha do sistema: ${fora} Troque-a assim que possível.`);
       }
 
       await this.prisma.usuario.create({

@@ -1,6 +1,6 @@
 import { PartialType, OmitType } from '@nestjs/mapped-types';
 import { CreateUsuarioDto } from './create-usuario.dto';
-import { IsString, MinLength } from 'class-validator';
+import { IsSenhaForte } from '../../common/validators/senha-forte';
 
 // Edição não troca a senha por aqui — isso tem endpoint próprio (ver ChangePasswordDto)
 export class UpdateUsuarioDto extends PartialType(
@@ -8,7 +8,6 @@ export class UpdateUsuarioDto extends PartialType(
 ) {}
 
 export class ChangePasswordDto {
-  @IsString()
-  @MinLength(8, { message: 'A nova senha deve ter pelo menos 8 caracteres.' })
+  @IsSenhaForte()
   novaSenha: string;
 }

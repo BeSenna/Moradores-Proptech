@@ -62,6 +62,16 @@ describe('AdminBootstrapService — síndico inicial automático', () => {
     expect(prisma.usuario.create).not.toHaveBeenCalled();
   });
 
+  it('cria o síndico mas avisa quando ADMIN_SENHA não segue a política de senha', async () => {
+    process.env.ADMIN_SENHA = 'senhasimples';
+    prisma.usuario.count.mockResolvedValue(0);
+    await service.onApplicationBootstrap();
+
+    expect(prisma.usuario.create).toHaveBeenCalledTimes(1);
+    const { warn } = (service as any).logger;
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('fora da política de senha'));
+  });
+
   it('não derruba a API se o banco falhar (ex.: tabelas ainda não criadas)', async () => {
     process.env.ADMIN_SENHA = 'SenhaForte123';
     prisma.usuario.count.mockRejectedValue(new Error('tabela inexistente'));

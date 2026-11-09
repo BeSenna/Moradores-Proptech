@@ -1,5 +1,6 @@
 import { UsuarioPerfil } from '../../generated/prisma/client';
-import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsSenhaForte } from '../../common/validators/senha-forte';
 
 export class CreateUsuarioDto {
   @IsString()
@@ -7,9 +8,9 @@ export class CreateUsuarioDto {
   @MaxLength(100)
   usuarioLogin!: string;
 
-  // senha em texto puro — o service faz o hash com bcrypt antes de persistir
-  @IsString()
-  @MinLength(8, { message: 'A senha deve ter pelo menos 8 caracteres.' })
+  // senha em texto puro — o service faz o hash com bcrypt antes de persistir.
+  // Política: 8 a 16 caracteres, com maiúscula, minúscula, número e caractere especial.
+  @IsSenhaForte()
   senha!: string;
 
   @IsOptional()

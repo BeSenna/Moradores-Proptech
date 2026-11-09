@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
+import { HealthModule } from './health/health.module';
 import { EventsModule } from './events/events.module';
 import { AuthModule } from './auth/auth.module';
 import { BlocoModule } from './bloco/bloco.module';
@@ -15,6 +16,7 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter'
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    HealthModule,
     EventsModule,
     AuthModule,
     BlocoModule,
