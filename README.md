@@ -35,10 +35,14 @@ têm bancos próprios e consultam este serviço via HTTP para validar `imovel_id
 
 | Componente | Endereço público | Endereço privado (rede do Senac) |
 |---|---|---|
-| Front-end | <http://academico3.rj.senac.br/condominio> | <http://10.136.38.50:7520> |
-| Gateway | <http://academico3.rj.senac.br/condominio/gateway> | <http://10.136.38.50:7521> |
+| Front-end (projeto separado) | <http://academico3.rj.senac.br/condominio> | <http://10.136.38.50:7520> |
+| Gateway (projeto separado) | <http://academico3.rj.senac.br/condominio/gateway> | <http://10.136.38.50:7521> |
 | **Microsserviço 1 — Moradores (este projeto)** | <http://academico3.rj.senac.br/condominio/morador> | <http://10.136.38.50:7522> |
 | Banco de dados (MySQL 5.7) | — | `edumysql.acesso.rj.senac.br:3306` (banco `20262m_prj5_condominio_morador`) |
+
+Cada componente é um **projeto (repositório) independente**: o front-end, o gateway e um repositório por microsserviço.
+Eles só se comunicam por HTTP (front → gateway → microsserviços). O único segredo compartilhado entre os backends é o
+`JWT_SECRET`, que cada um busca no próprio Infisical; este repositório não contém código do gateway nem do front.
 
 O servidor repassa as requisições **mantendo** o caminho `/condominio/morador`, por isso a API usa esse prefixo
 em todas as rotas. Exemplos: `POST /condominio/morador/auth/login` e o Swagger em `/condominio/morador/docs` (desligado em produção por padrão: veja [Hardening e observabilidade](#hardening-e-observabilidade)).
@@ -422,8 +426,8 @@ Abra também <http://localhost:7522/condominio/morador/health> e <http://localho
 
 ### Conectando o frontend
 
-O frontend (e o gateway) chamam este serviço pelo endereço da seção [Endereços do ambiente](#endereços-do-ambiente).
-O navegador não fala direto com o serviço: o front usa a base `/condominio/gateway/morador`, e o gateway repassa
+O gateway (projeto separado) chama este serviço pelo endereço da seção [Endereços do ambiente](#endereços-do-ambiente).
+O navegador não fala direto com o serviço: o front (outro projeto) usa a base `/condominio/gateway/morador`, e o gateway repassa
 para `/condominio/morador/*` (precisa encaminhar o header `Authorization`, os métodos `PATCH`/`DELETE` e os corpos
 de erro 400/401/403 sem alterar). Ao cadastrar moradores para testar, use **CPFs válidos** (a API confere os
 dígitos verificadores; `529.982.247-25` é um exemplo).
@@ -464,7 +468,7 @@ Seguindo o padrão do projeto HemoVida-estoque, o repositório tem dois pipeline
 **`JenkinsfileLinux`** (agente Linux, `sh` — é o usado no servidor) e **`Jenkinsfile`** (agente Windows, `bat`).
 O "Script Path" do job precisa apontar para o arquivo certo. Fluxo:
 
-1. checkout da branch `feat/prisma-7`;
+1. checkout da branch `main` (o job do Jenkins deve apontar para `*/main`);
 2. busca os segredos no Infisical (`infisical export`, ambiente `dev`, pasta `/`) com o token guardado no Jenkins
    na credencial **`tokenbernardocondominio`** (tipo *Secret text*; Machine Identity com Token Auth, somente leitura),
    grava um `.env` temporário e remove as aspas dos valores (`sed`);

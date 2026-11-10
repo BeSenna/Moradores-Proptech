@@ -25,7 +25,7 @@ pipeline {
             steps {
                 checkout([
                     $class: 'GitSCM',
-                    branches: [[name: '*/feat/prisma-7']],
+                    branches: [[name: '*/main']],
                     userRemoteConfigs: [[
                         url: 'https://github.com/BeSenna/Moradores-Proptech'
                     ]]
