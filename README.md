@@ -143,10 +143,15 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
      "usuarioId": 42,
      "moradorId": 7,
      "usuarioPerfil": "MORADOR",
+     "imovelIds": [3, 5],
      "iat": 1730000000,
      "exp": 1730028800
    }
    ```
+
+   `imovelIds` são os imóveis com vínculo ativo do morador (vazio para o síndico); o MS Financeiro usa essa lista
+   para mostrar ao morador só as cobranças do imóvel dele. O token é fixo: se os vínculos mudarem, o morador
+   só passa a ver a mudança depois de fazer login de novo.
 
 7. O cliente guarda o token e passa a enviá-lo em `Authorization: Bearer <token>`
    em toda chamada protegida.
@@ -563,7 +568,7 @@ Requisição:
 { "usuarioLogin": "ana.souza", "senha": "minhasenha123" }
 ```
 
-Resposta `200 OK`:
+Resposta `201 Created`:
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIs...",
