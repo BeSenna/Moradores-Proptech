@@ -464,11 +464,10 @@ pelo `ADMIN_SENHA`.
 
 ## Deploy (Jenkins)
 
-Seguindo o padrão do projeto HemoVida-estoque, o repositório tem dois pipelines com o mesmo fluxo:
-**`JenkinsfileLinux`** (agente Linux, `sh` — é o usado no servidor) e **`Jenkinsfile`** (agente Windows, `bat`).
-O "Script Path" do job precisa apontar para o arquivo certo. Fluxo:
+Seguindo o padrão do projeto HemoVida-estoque, o repositório tem um único pipeline, o **`Jenkinsfile`** (agente Linux, `sh`).
+No job do Jenkins, use *Pipeline script from SCM*, branch `*/main` e "Script Path" `Jenkinsfile`. Fluxo:
 
-1. checkout da branch `main` (o job do Jenkins deve apontar para `*/main`);
+1. checkout da branch `main`;
 2. busca os segredos no Infisical (`infisical export`, ambiente `dev`, pasta `/`) com o token guardado no Jenkins
    na credencial **`tokenbernardocondominio`** (tipo *Secret text*; Machine Identity com Token Auth, somente leitura),
    grava um `.env` temporário e remove as aspas dos valores (`sed`);
@@ -477,8 +476,7 @@ O "Script Path" do job precisa apontar para o arquivo certo. Fluxo:
 4. confere se o container `moradores-proptech` está rodando e se `/condominio/morador/health` responde (API **e** banco; o Swagger não é mais usado para isso, pois fica desligado em produção);
 5. no fim (`post/always`) apaga o `.env`, então nenhum segredo fica no disco do Jenkins.
 
-No `Jenkinsfile` (Windows) os segredos não viram arquivo: o `infisical run` os injeta direto no processo do
-`docker compose`. A imagem (`Dockerfile`) é *multi-stage*: só o código compilado e as dependências de produção vão
+A imagem (`Dockerfile`) é *multi-stage*: só o código compilado e as dependências de produção vão
 para a imagem final, que roda como usuário `node` (não root).
 
 **Trocou a senha do banco?** Ela fica só no segredo `DATABASE_URL` do Infisical (ambiente `dev`) — atualize lá (com
