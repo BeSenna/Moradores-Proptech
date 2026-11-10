@@ -43,6 +43,28 @@ describe('AuthService.login', () => {
     );
   });
 
+  it('coloca no token os imóveis das relações ainda vigentes (sem repetir)', async () => {
+    prisma.usuario.findUnique.mockResolvedValue(usuario);
+    prisma.moradorImovel.findFirst.mockResolvedValue({ moradorId: 7 });
+    prisma.moradorImovel.findMany.mockResolvedValue([{ imovelId: 3 }, { imovelId: 4 }, { imovelId: 3 }]);
+
+    await service.login({ usuarioLogin: 'ana', senha: 'senha1234' });
+
+    expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ imovelIds: [3, 4] }));
+    const { where } = prisma.moradorImovel.findMany.mock.calls[0][0];
+    expect(where).toMatchObject({ usuarioId: 42, moradorImovelStatus: 1 });
+    expect(where.OR).toEqual([{ moradorImovelDataFim: null }, { moradorImovelDataFim: { gt: expect.any(Date) } }]);
+  });
+
+  it('síndico não consulta imóveis e leva lista vazia', async () => {
+    prisma.usuario.findUnique.mockResolvedValue({ ...usuario, usuarioPerfil: 'SINDICO' });
+
+    await service.login({ usuarioLogin: 'ana', senha: 'senha1234' });
+
+    expect(prisma.moradorImovel.findMany).not.toHaveBeenCalled();
+    expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ imovelIds: [] }));
+  });
+
   it('moradorId fica null quando a conta não tem vínculo', async () => {
     prisma.usuario.findUnique.mockResolvedValue(usuario);
     prisma.moradorImovel.findFirst.mockResolvedValue(null);

@@ -10,6 +10,9 @@ export interface JwtPayload {
   usuarioId: number;
   moradorId: number | null;
   usuarioPerfil: 'SINDICO' | 'MORADOR';
+  // Imóveis com relação ativa da conta no momento do login. O MS Financeiro usa esta lista para mostrar
+  // ao morador só as cobranças do(s) imóvel(is) dele. Síndico: lista vazia (enxerga tudo pelo perfil).
+  imovelIds: number[];
 }
 
 @Injectable()
@@ -43,6 +46,8 @@ export class AuthService {
     }
 
     const moradorId = await this.resolverMoradorId(usuario.usuarioId);
+    const imovelIds =
+      usuario.usuarioPerfil === 'MORADOR' ? await this.resolverImovelIds(usuario.usuarioId) : [];
 
     await this.prisma.usuario.update({
       where: { usuarioId: usuario.usuarioId },
@@ -56,6 +61,7 @@ export class AuthService {
       usuarioId: usuario.usuarioId,
       moradorId,
       usuarioPerfil: usuario.usuarioPerfil,
+      imovelIds,
     };
 
     return {
@@ -67,6 +73,21 @@ export class AuthService {
         moradorId,
       },
     };
+  }
+
+  // Relações da conta que ainda valem: ativas e sem data de fim, ou com fim no futuro (ENCERRANDO).
+  private async resolverImovelIds(usuarioId: number): Promise<number[]> {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const relacoes = await this.prisma.moradorImovel.findMany({
+      where: {
+        usuarioId,
+        moradorImovelStatus: 1,
+        OR: [{ moradorImovelDataFim: null }, { moradorImovelDataFim: { gt: hoje } }],
+      },
+      select: { imovelId: true },
+    });
+    return [...new Set(relacoes.map((r) => r.imovelId))];
   }
 
   private async resolverMoradorId(usuarioId: number): Promise<number | null> {
