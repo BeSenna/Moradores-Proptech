@@ -44,8 +44,12 @@ Cada componente é um **projeto (repositório) independente**: o front-end, o ga
 Eles só se comunicam por HTTP (front → gateway → microsserviços). O único segredo compartilhado entre os backends é o
 `JWT_SECRET`, que cada um busca no próprio Infisical; este repositório não contém código do gateway nem do front.
 
-O servidor repassa as requisições **mantendo** o caminho `/condominio/morador`, por isso a API usa esse prefixo
-em todas as rotas. Exemplos: `POST /condominio/morador/auth/login` e o Swagger em `/condominio/morador/docs` (desligado em produção por padrão: veja [Hardening e observabilidade](#hardening-e-observabilidade)).
+O servidor **retira** o trecho `/condominio/morador` antes de repassar a requisição ao container. Por isso a API **não usa prefixo**:
+ela atende na raiz (`/health`, `/auth/login`, `/bloco`...) e o endereço público é o prefixo + a rota.
+Exemplo: `http://academico3.rj.senac.br/condominio/morador/health` chega na API como `/health`
+(e **não** existe `/condominio/morador/condominio/morador/health`). O Swagger fica em `/docs` (desligado em produção por padrão: veja [Hardening e observabilidade](#hardening-e-observabilidade)).
+
+> Se algum dia um proxy passar a repassar o caminho completo, defina `API_PREFIX=condominio/morador` (Infisical ou `.env`) e a API responde sob esse prefixo. Por padrão a variável fica vazia.
 
 ## Stack técnica
 
@@ -129,7 +133,7 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
 
 ### Fluxo de login
 
-1. Cliente envia `POST /condominio/morador/auth/login` com `usuarioLogin` e `senha`.
+1. Cliente envia `POST /auth/login` com `usuarioLogin` e `senha`.
 2. `AuthService` busca o `usuario` pelo login e confere `usuario_status = 1`.
 3. A senha é comparada com `usuario_senha_hash` via `bcrypt.compare()`.
 4. Se válida, o serviço resolve o `moradorId` consultando `morador_imovel` pelo
@@ -176,7 +180,7 @@ Nenhum `DELETE` do CRUD apaga linha — todos fazem soft-delete via essa coluna.
 
 | Operação | Quem pode |
 |---|---|
-| `POST /condominio/morador/auth/login` e `GET /condominio/morador/health` | qualquer um (rotas públicas) |
+| `POST /auth/login` e `GET /health` | qualquer um (rotas públicas) |
 | `GET` de bloco e de imóvel (lista e detalhe) | qualquer usuário autenticado (no detalhe do imóvel, o `MORADOR` não vê CPF/e-mail/telefone dos moradores vinculados) |
 | `GET` da **lista** de moradores e da **lista** de relações | só `SINDICO` (dados pessoais — LGPD) |
 | `GET /morador/:id` e `GET /morador-imovel/:id` | `SINDICO` (qualquer registro) ou o próprio morador (`moradorId` do token); outro morador recebe `403` |
@@ -196,7 +200,7 @@ ms-moradores/
 ├── test/                      # testes e2e e helpers (mock do Prisma)
 ├── src/
 │   ├── main.ts                 # bootstrap (porta 7522)
-│   ├── app.constants.ts        # PREFIXO_API = 'condominio/morador'
+│   ├── app.constants.ts        # PREFIXO_API (API_PREFIX; vazio por padrão)
 │   ├── app.module.ts           # módulo raiz, amarra todos os módulos
 │   │
 │   ├── generated/prisma/       # Prisma Client GERADO (não versionado: rode `npx prisma generate`)
@@ -244,7 +248,7 @@ Passo a passo para quem **nunca rodou o projeto**. Antes, três fatos sobre o am
   (ou na VPN), e usuário e senha vêm do grupo, pelo Infisical.
 - **O usuário da aplicação só tem `SELECT/INSERT/UPDATE/DELETE`** nesse banco. As tabelas foram criadas pelo
   professor com o script `prisma/migrations/20261019000000_init/migration.sql`; o Prisma Migrate **não** roda no servidor.
-- **As rotas ficam sob o prefixo `/condominio/morador`** e a API escuta na porta **7522**.
+- **A API atende na raiz** (sem prefixo; o servidor publica em `/condominio/morador` e retira o trecho) e escuta na porta **7522**.
 
 Escolha um dos dois caminhos:
 
@@ -324,16 +328,16 @@ docker compose up --build                                    # sem Infisical (l�
 ```
 
 Na primeira vez leva alguns minutos. Está pronto quando aparecer no log
-`Nest application successfully started` e `MS Moradores rodando em http://localhost:7522/condominio/morador`.
+`Nest application successfully started` e `MS Moradores rodando em http://localhost:7522`.
 Deixe o terminal aberto (ou acrescente `-d` para rodar em segundo plano).
 
 **5. Confirme que funcionou**
 
-- Health check: <http://localhost:7522/condominio/morador/health> (deve responder `{"status":"Healthy",...}`)
-- Swagger (documentação interativa): <http://localhost:7522/condominio/morador/docs> — a imagem Docker sobe com o Swagger **desligado**; para ligar, defina `SWAGGER_ENABLED=true` (Infisical ou `.env`)
+- Health check: <http://localhost:7522/health> (deve responder `{"status":"Healthy",...}`)
+- Swagger (documentação interativa): <http://localhost:7522/docs> — a imagem Docker sobe com o Swagger **desligado**; para ligar, defina `SWAGGER_ENABLED=true` (Infisical ou `.env`)
 - Login:
   ```bash
-  curl -X POST http://localhost:7522/condominio/morador/auth/login \
+  curl -X POST http://localhost:7522/auth/login \
     -H "Content-Type: application/json" \
     -d '{"usuarioLogin":"admin","senha":"SUA_ADMIN_SENHA"}'
   ```
@@ -416,34 +420,35 @@ npm run build && npm run start:prod   # produção
 ```
 
 O CLI do Infisical já vem nas dependências de desenvolvimento (`@infisical/cli`), então o `npm install` basta.
-Está no ar quando aparecer `MS Moradores rodando em http://localhost:7522/condominio/morador`.
+Está no ar quando aparecer `MS Moradores rodando em http://localhost:7522`.
 
 **7. Confirme que funcionou**
 
 ```bash
 npm test                                       # ~140 testes, não precisam de MySQL (mas precisam do `prisma generate`)
-curl -X POST http://localhost:7522/condominio/morador/auth/login \
+curl -X POST http://localhost:7522/auth/login \
   -H "Content-Type: application/json" \
   -d '{"usuarioLogin":"admin","senha":"SUA_ADMIN_SENHA"}'
 ```
 
-Abra também <http://localhost:7522/condominio/morador/health> e <http://localhost:7522/condominio/morador/docs> (Swagger; fora de produção ele já vem ligado).
+Abra também <http://localhost:7522/health> e <http://localhost:7522/docs> (Swagger; fora de produção ele já vem ligado).
 
 ### Conectando o frontend
 
 O gateway (projeto separado) chama este serviço pelo endereço da seção [Endereços do ambiente](#endereços-do-ambiente).
 O navegador não fala direto com o serviço: o front (outro projeto) usa a base `/condominio/gateway/morador`, e o gateway repassa
-para `/condominio/morador/*` (precisa encaminhar o header `Authorization`, os métodos `PATCH`/`DELETE` e os corpos
+para o Moradores (direto em `http://10.136.38.50:7522/<rota>` ou pelo endereço público `/condominio/morador/<rota>`; precisa encaminhar o header `Authorization`, os métodos `PATCH`/`DELETE` e os corpos
 de erro 400/401/403 sem alterar). Ao cadastrar moradores para testar, use **CPFs válidos** (a API confere os
 dígitos verificadores; `529.982.247-25` é um exemplo).
-Em desenvolvimento local, a base é `http://localhost:7522/condominio/morador`. Entre com o síndico criado
+Em desenvolvimento local, a base é `http://localhost:7522`. Entre com o síndico criado
 pelo `ADMIN_SENHA`.
 
 ### Problemas comuns
 
 | Sintoma | Causa e solução |
 |---|---|
-| `404 Not Found` em `/api/...` | O prefixo das rotas agora é `/condominio/morador` (não existe mais `/api`). Exemplo: `/condominio/morador/auth/login` |
+| `404 Not Found` em `/api/...` | Não existe `/api`: as rotas ficam na raiz. Exemplo: `/auth/login` (local) ou `/condominio/morador/auth/login` (endereço público) |
+| `404` ao acessar `/condominio/morador/condominio/morador/...` | O prefixo foi duplicado. Use só um: `http://academico3.rj.senac.br/condominio/morador/health` (público) ou `http://localhost:7522/health` (local) |
 | `port is already allocated` / `EADDRINUSE` | Outra aplicação usa 7522, 5672 ou 15672. Pare a API local (Ctrl+C) antes de subir o Docker, ou mude a porta à esquerda em `ports:` do `docker-compose.yml` |
 | `required variable DATABASE_URL is missing a value` | O compose não achou as variáveis. Rode com `npx infisical run --env=dev -- docker compose up --build` ou crie o `.env` |
 | `CREATE command denied` / `P3014` | O usuário do servidor só tem `SELECT/INSERT/UPDATE/DELETE`. Não rode `prisma migrate` no servidor; peça ao professor para executar `prisma/migrations/20261019000000_init/migration.sql` |
@@ -459,7 +464,7 @@ pelo `ADMIN_SENHA`.
 | Docker Desktop não inicia no Windows | Habilite a virtualização na BIOS e o WSL 2 (`wsl --install` no PowerShell como administrador) e reinicie |
 | No Windows o container reinicia com `set: Illegal option -` ou `no such file` em `entrypoint.sh` | Final de linha CRLF. O repositório traz um `.gitattributes` que força LF; se o clone foi feito sem ele: `git rm --cached -r . && git reset --hard` (ou clone de novo) |
 | `npm install` ou `prisma generate` falha por versão do Node | O Prisma 7 exige Node 22.12+ (ou 24). Confira `node -v`; com nvm: `nvm install 24 && nvm use 24` |
-| `404` em `/condominio/morador/docs` | O Swagger está desligado (imagem Docker/produção). Defina `SWAGGER_ENABLED=true` e reinicie |
+| `404` em `/docs` | O Swagger está desligado (imagem Docker/produção). Defina `SWAGGER_ENABLED=true` e reinicie |
 | `docker ps` mostra o container `unhealthy` | O `HEALTHCHECK` consulta `/health` e o banco não respondeu. Veja o log (`Health check falhou: ...`) e confira VPN/rede e a `DATABASE_URL` |
 | `400` ao criar usuário ou trocar a senha, com mensagem sobre a senha | A senha não segue a [política](#política-de-senha) (8 a 16 caracteres, maiúscula, minúscula, número e caractere especial) |
 | Login do síndico retorna 401 | O síndico só é criado se `ADMIN_SENHA` tem 8+ caracteres e **ainda não existe** síndico ativo. Veja o log da API |
@@ -478,7 +483,7 @@ No job do Jenkins, use *Pipeline script from SCM*, branch `*/main` e "Script Pat
    grava um `.env` temporário e remove as aspas dos valores (`sed`);
 3. `docker compose config` → `docker compose build api` → `docker compose up -d --no-deps --force-recreate api`
    (sobe só a API; o RabbitMQ do compose é para uso local e, no servidor, vale o `RABBITMQ_URL` do Infisical);
-4. confere se o container `moradores-proptech` está rodando e se `/condominio/morador/health` responde (API **e** banco; o Swagger não é mais usado para isso, pois fica desligado em produção);
+4. confere se o container `moradores-proptech` está rodando e se `/health` responde (API **e** banco; o Swagger não é mais usado para isso, pois fica desligado em produção);
 5. no fim (`post/always`) apaga o `.env`, então nenhum segredo fica no disco do Jenkins.
 
 A imagem (`Dockerfile`) é *multi-stage*: só o código compilado e as dependências de produção vão
@@ -513,8 +518,8 @@ O schema (`prisma/schema.prisma`) espelha o banco `condominio_moradores`. As tab
 Criar um `usuario` exige já estar logado como síndico. Para resolver isso, ao subir, a API cria sozinha o
 primeiro síndico **se não existir nenhum síndico ativo**, usando `ADMIN_LOGIN` (padrão `admin`) e
 `ADMIN_SENHA` (mínimo 8 caracteres; se não seguir a [política de senha](#política-de-senha), a conta é criada mesmo assim e um aviso aparece no log). Sem `ADMIN_SENHA`, nada é criado e um aviso aparece no log. Depois do
-primeiro start a rotina não faz mais nada. Troque a senha em `PATCH /condominio/morador/usuario/:id/senha`.
-Os moradores comuns são criados depois, pelo síndico, em `POST /condominio/morador/usuario`; as senhas ficam no
+primeiro start a rotina não faz mais nada. Troque a senha em `PATCH /usuario/:id/senha`.
+Os moradores comuns são criados depois, pelo síndico, em `POST /usuario`; as senhas ficam no
 banco só como hash.
 
 ### Testes automatizados
@@ -544,7 +549,7 @@ própios dados (LGPD), a validação de CPF e dos filtros de query (400 em vez d
 
 ## Referência da API
 
-Todas as rotas abaixo têm o prefixo `/condominio/morador` (ex.: `/auth/login` = `/condominio/morador/auth/login`). 🔒 = exige `Authorization: Bearer`.
+As rotas abaixo valem a partir da raiz da API (ex.: `/auth/login`); no endereço público leve o prefixo na frente (`/condominio/morador/auth/login`). 🔒 = exige `Authorization: Bearer`.
 👑 = exige, além do token, perfil `SINDICO`.
 
 ### Saúde
@@ -770,7 +775,7 @@ entrando. A `ADMIN_SENHA` do síndico inicial só gera um aviso no log se estive
 
 #### Swagger por ambiente
 
-O Swagger (`/condominio/morador/docs`) expõe toda a API publicamente, então em produção ele fica **desligado por padrão**:
+O Swagger (`/docs`) expõe toda a API publicamente, então em produção ele fica **desligado por padrão**:
 
 | `SWAGGER_ENABLED` | `NODE_ENV` | Swagger |
 |---|---|---|
@@ -783,7 +788,7 @@ Para uma demonstração no servidor, defina `SWAGGER_ENABLED=true` no Infisical 
 
 ### Health check
 
-`GET /condominio/morador/health` (público, sem token) confere se a API está de pé e se o banco responde a um `SELECT 1`:
+`GET /health` (público, sem token) confere se a API está de pé e se o banco responde a um `SELECT 1`:
 
 ```json
 { "status": "Healthy", "checks": { "api": "up", "database": "up" } }
@@ -800,7 +805,7 @@ O Nest registra cada linha com data/hora e nível. O projeto acrescenta duas coi
 ```
 [Nest] 530 - 11/09/2026, 4:22:02 PM  WARN [AuthService] Falha de login | usuario=admin | motivo=senha incorreta | ip=10.136.38.50
 [Nest] 530 - 11/09/2026, 4:22:02 PM   LOG [AuthService] Login realizado | usuario=admin | id=1 | perfil=SINDICO | ip=200.10.20.30
-[Nest] 530 - 11/09/2026, 4:22:03 PM   LOG [HTTP] POST /condominio/morador/usuario 201 100ms | usuario=1 | ip=200.10.20.30
+[Nest] 530 - 11/09/2026, 4:22:03 PM   LOG [HTTP] POST /usuario 201 100ms | usuario=1 | ip=200.10.20.30
 ```
 
 - **Login:** sucesso (`LOG`) e falha (`WARN`, com o motivo), com o IP.
@@ -861,7 +866,7 @@ No servidor, veja com `docker logs -f moradores-proptech`. O formato é de texto
 
 O síndico inicial é criado automaticamente na primeira subida, com o `ADMIN_LOGIN` (padrão `admin`) e a
 `ADMIN_SENHA` definidos no Infisical (ou no `.env`). A senha **não** é documentada aqui. Os moradores comuns
-são cadastrados depois pelo síndico (`POST /condominio/morador/usuario`).
+são cadastrados depois pelo síndico (`POST /usuario`).
 
 
 ## Acesso do dia a dia

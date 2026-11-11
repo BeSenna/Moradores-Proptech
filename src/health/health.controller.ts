@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const TEMPO_MAXIMO_MS = 3000;
 
-// GET /condominio/morador/health — público (sem token), para Docker, Jenkins e balanceadores
+// GET /health — público (sem token), para Docker, Jenkins e balanceadores
 // saberem se a API está de pé e conseguindo falar com o banco.
 //   200  { "status": "Healthy",   "checks": { "api": "up", "database": "up" } }
 //   503  { "status": "Unhealthy", "checks": { "api": "up", "database": "down" } }

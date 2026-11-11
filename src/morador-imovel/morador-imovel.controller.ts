@@ -35,7 +35,7 @@ export class MoradorImovelController {
     return this.moradorImovelService.create(dto);
   }
 
-  // GET /condominio/morador/morador-imovel?tipoRelacao=PROPRIETARIO&moradorId=5&imovelId=12
+  // GET /morador-imovel?tipoRelacao=PROPRIETARIO&moradorId=5&imovelId=12
   // Lista de todas as relações: só o síndico. O morador consulta a sua em GET /morador/:id.
   @Roles('SINDICO')
   @Get()

@@ -23,6 +23,6 @@ export function configureApp(app: INestApplication) {
 
   app.setGlobalPrefix(PREFIXO_API);
 
-  // Documentação interativa (Swagger) em /condominio/morador/docs — só quando habilitada (ver swaggerHabilitado)
+  // Documentação interativa (Swagger) em /docs (sob o prefixo, se houver) — só quando habilitada (ver swaggerHabilitado)
   setupSwagger(app);
 }

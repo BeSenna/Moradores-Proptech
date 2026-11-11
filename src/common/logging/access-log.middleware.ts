@@ -6,7 +6,7 @@ const logger = new Logger('HTTP');
 
 // Log de acesso: uma linha por requisição respondida, com QUEM (id do usuário do token), O QUÊ
 // (método, rota e status), QUANTO (duração) e DE ONDE (IP). O Logger do Nest acrescenta o QUANDO.
-//   GET /condominio/morador/bloco 200 12ms | usuario=1 | ip=10.136.38.50
+//   GET /bloco 200 12ms | usuario=1 | ip=10.136.38.50
 // Propositalmente NÃO registra query string (a busca pode conter CPF), corpo nem headers (senha e token).
 // Não registra /health (chamado a cada poucos segundos) nem os arquivos do Swagger.
 export function accessLog(req: Request, res: Response, next: NextFunction) {

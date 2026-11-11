@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
-import { PREFIXO_API } from '../app.constants';
+import { caminhoApi } from '../app.constants';
 
 /**
  * Documentação OpenAPI (Swagger) do MS Moradores.
@@ -10,8 +10,8 @@ import { PREFIXO_API } from '../app.constants';
  * (rotas, paginação e permissões). Fica toda neste arquivo para não misturar documentação
  * com a lógica dos controllers. Ao criar/alterar uma rota, atualize o trecho correspondente.
  *
- * UI:   GET /condominio/morador/docs
- * JSON: GET /condominio/morador/docs-json
+ * UI:   GET /docs
+ * JSON: GET /docs-json
  */
 
 // ───────────────────────── helpers ─────────────────────────
@@ -870,7 +870,7 @@ const document: OpenAPIObject = {
       '3. Execute qualquer rota. Rotas com 🔒 exigem token; as marcadas como *SINDICO* exigem também esse perfil (senão: 403).',
       '',
       '**Convenções**',
-      '- Prefixo `/condominio/morador` em todas as rotas.',
+      '- Em produção a API é publicada em `http://academico3.rj.senac.br/condominio/morador`; o servidor retira esse trecho, então as rotas abaixo valem a partir dali (ex.: `/condominio/morador/bloco`).',
       '- Exclusão é *lógica*: `DELETE` muda o `*_status` para 0 e o registro continua existindo.',
       '- Listagens aceitam `page` e `pageSize` e respondem `{ data, total, page, pageSize, totalPages }`.',
       '- Erros seguem `{ statusCode, message, error }`.',
@@ -880,7 +880,7 @@ const document: OpenAPIObject = {
       '- Ligou para uma demonstração? Desligue depois (remova a variável e recrie o container): a página expõe toda a API.',
     ].join('\n'),
   },
-  servers: [{ url: `/${PREFIXO_API}`, description: 'MS Moradores' }],
+  servers: [{ url: caminhoApi(), description: 'MS Moradores' }],
   tags: [
     { name: 'Saúde', description: 'Health check da API e do banco' },
     { name: 'Autenticação', description: 'Login e verificação do token JWT' },
@@ -912,7 +912,7 @@ export function swaggerHabilitado(env: NodeJS.ProcessEnv = process.env): boolean
 
 export function setupSwagger(app: INestApplication) {
   if (!swaggerHabilitado()) return;
-  SwaggerModule.setup(`${PREFIXO_API}/docs`, app, document, {
+  SwaggerModule.setup(caminhoApi('docs').slice(1), app, document, {
     customSiteTitle: 'MS Moradores — API',
     swaggerOptions: { persistAuthorization: true },
   });

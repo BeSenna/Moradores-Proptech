@@ -8,7 +8,7 @@
 # No servidor (Jenkins): o pipeline grava os segredos do Infisical num .env temporário e sobe SÓ a API
 # (docker compose up -d --no-deps api). Se o RABBITMQ_URL existir no Infisical, ele vale no lugar do broker local abaixo.
 #
-# API:      http://localhost:7522/condominio/morador        Swagger: http://localhost:7522/condominio/morador/docs
+# API:      http://localhost:7522        Swagger: http://localhost:7522/docs        (público: http://academico3.rj.senac.br/condominio/morador)
 # RabbitMQ: http://localhost:15672 (guest / guest)
 # As tabelas já existem no servidor (criadas pelo professor); o síndico inicial é criado pela própria API (ADMIN_LOGIN/ADMIN_SENHA).
 services:

@@ -134,7 +134,7 @@ pipeline {
                 // Falha aqui deixa o build "instável" (amarelo), sem derrubar o deploy já feito.
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     sh '''
-                        docker exec "$APP_NAME" node -e "const t=async()=>{for(let i=0;i<15;i++){try{const r=await fetch('http://localhost:7522/condominio/morador/health');if(r.ok){console.log('API respondendo.');return}}catch(e){}await new Promise(r=>setTimeout(r,3000))}console.log('API não respondeu a tempo.');process.exit(1)};t()" || {
+                        docker exec "$APP_NAME" node -e "const t=async()=>{for(let i=0;i<15;i++){try{const r=await fetch('http://localhost:7522/health');if(r.ok){console.log('API respondendo.');return}}catch(e){}await new Promise(r=>setTimeout(r,3000))}console.log('API não respondeu a tempo.');process.exit(1)};t()" || {
                             docker logs --tail 40 "$APP_NAME" || true
                             exit 1
                         }
