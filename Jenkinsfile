@@ -14,7 +14,7 @@ pipeline {
     }
 
     environment {
-        APP_NAME             = 'moradores-proptech'   // = container_name do docker-compose.yml
+        APP_NAME             = 'proptech-moradores'   // = container_name do docker-compose.yml
         APP_PORT             = '7522'
         INFISICAL_PROJECT_ID = '70db4fbb-c0a2-4296-b9ad-730ebf55bb62'  // projeto "Morador" (não é segredo)
         INFISICAL_ENV        = 'dev'                  // ambiente do Infisical (slug: dev/prod)
