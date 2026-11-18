@@ -26,7 +26,7 @@ services:
 
   api:
     build: .
-    container_name: moradores-proptech
+    container_name: proptech-moradores
     depends_on:
       rabbitmq:
         condition: service_healthy
