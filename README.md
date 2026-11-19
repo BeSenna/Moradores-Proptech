@@ -648,6 +648,22 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 
 ### Relação (`morador_imovel`)
 
+> **Mesma pessoa em mais de uma relação:** para ser proprietário *e* morador do mesmo
+> imóvel, crie duas relações (`PROPRIETARIO` e `MORADOR`); a segunda herda o login da
+> primeira. Outras somas no mesmo imóvel retornam `409`.
+>
+> **Dados anteriores a esta regra:** relações antigas de quem já tinha login não herdam
+> a conta retroativamente. Se necessário, rode uma vez no banco (confira antes com `SELECT`):
+> ```sql
+> UPDATE morador_imovel mi
+> JOIN (SELECT morador_id, MIN(usuario_id) AS usuario_id
+>       FROM morador_imovel WHERE usuario_id IS NOT NULL
+>       GROUP BY morador_id HAVING COUNT(DISTINCT usuario_id) = 1) x
+>   ON x.morador_id = mi.morador_id
+> SET mi.usuario_id = x.usuario_id
+> WHERE mi.usuario_id IS NULL AND mi.morador_imovel_status = 1;
+> ```
+
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | `POST` | `/morador-imovel` | 👑 | Cria o vínculo morador↔imóvel |
@@ -826,6 +842,16 @@ No servidor, veja com `docker logs -f moradores-proptech`. O formato é de texto
   validação (data_fim não pode ser anterior a data_inicio) é aplicada em `create`,
   `update` e `encerrar`, para que nenhuma rota consiga contornar a regra.
 - **`usuario` sem FK direta para `morador`.** Ver [Modelo de dados](#modelo-de-dados).
+- **Várias relações para a mesma pessoa.** Um morador pode ter relações com vários
+  imóveis. No *mesmo* imóvel só é permitida a soma `PROPRIETARIO` + `MORADOR` (o dono
+  que também mora lá); qualquer outra combinação de relações ativas
+  (proprietário + inquilino, proprietário + temporada, inquilino + morador etc.) é
+  recusada com `409` em `POST` e `PATCH`. Só conta o que está em vigor: relações
+  encerradas ou inativas não impedem um novo tipo.
+- **Um login por pessoa.** O acesso ao portal pertence à pessoa, não à relação. Ao criar
+  uma relação para um morador que já tem uma conta ativa em outra relação, a nova
+  relação herda o mesmo `usuario_id` (um único login enxerga todos os imóveis).
+  Uma relação que já tem login não pode ser transferida para outro morador.
 - **Senha nunca retorna na API.** `UsuarioService` usa um `select` explícito
   (constante `SEM_SENHA`) que exclui `usuario_senha_hash` de toda resposta,
   inclusive listagens.

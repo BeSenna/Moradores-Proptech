@@ -10,6 +10,18 @@ type EstadoRelacao = 'ATIVO' | 'ENCERRANDO' | 'ENCERRADO';
 // Tipos de relação que habilitam cobrança — ver "Eventos RabbitMQ" na arquitetura
 // do MS Moradores: o evento só é relevante para o MS Financeiro nestes dois casos.
 const TIPOS_QUE_GERAM_COBRANCA: MoradorImovelTipoRelacao[] = ['PROPRIETARIO', 'INQUILINO'];
+
+// Uma pessoa pode ter mais de uma relação ativa com o MESMO imóvel, mas a única soma
+// de tipos permitida é PROPRIETARIO + MORADOR (o dono que também mora lá).
+// Qualquer outra (dono + inquilino, dono + temporada, inquilino + morador...) é bloqueada.
+const COMBINACAO_PERMITIDA: MoradorImovelTipoRelacao[] = ['PROPRIETARIO', 'MORADOR'];
+
+const ROTULO_TIPO: Record<MoradorImovelTipoRelacao, string> = {
+  PROPRIETARIO: 'Proprietário',
+  INQUILINO: 'Inquilino',
+  MORADOR: 'Morador',
+  TEMPORADA: 'Temporada',
+};
  
 @Injectable()
 export class MoradorImovelService {
@@ -28,6 +40,19 @@ export class MoradorImovelService {
       );
     }
  
+    const status = dto.moradorImovelStatus ?? 1;
+    if (this.estaVigente(status, dto.moradorImovelDataFim ?? null)) {
+      await this.garantirCombinacaoPermitida(
+        dto.moradorId!,
+        dto.imovelId!,
+        dto.moradorImovelTipoRelacao!,
+      );
+    }
+
+    // O acesso ao portal é da pessoa, não da relação: se o morador já tem uma conta ativa
+    // em outra relação, a nova relação herda a mesma conta (um único login para todos os imóveis).
+    const usuarioId = await this.usuarioDoMorador(dto.moradorId!);
+
     let vinculo: Awaited<ReturnType<typeof this.prisma.moradorImovel.create>>;
     try {
       vinculo = await this.prisma.moradorImovel.create({
@@ -39,7 +64,8 @@ export class MoradorImovelService {
           moradorImovelDataFim: dto.moradorImovelDataFim
             ? new Date(dto.moradorImovelDataFim)
             : undefined,
-          moradorImovelStatus: dto.moradorImovelStatus ?? 1,
+          moradorImovelStatus: status,
+          ...(usuarioId !== null ? { usuarioId } : {}),
         },
       });
     } catch (e) {
@@ -131,6 +157,41 @@ export class MoradorImovelService {
       }
     }
  
+    // A conta de acesso fica amarrada à pessoa: trocar o morador de uma relação que já tem
+    // login deixaria a conta apontando para duas pessoas diferentes.
+    if (
+      dto.moradorId !== undefined &&
+      dto.moradorId !== atual.moradorId &&
+      atual.usuarioId !== null &&
+      atual.usuarioId !== undefined
+    ) {
+      throw new ConflictException(
+        'Esta relação tem acesso ao portal e não pode ser transferida para outro morador. Crie uma nova relação.',
+      );
+    }
+
+    // Valida a combinação de tipos com o estado que a relação terá depois da edição.
+    const final = {
+      moradorId: dto.moradorId ?? atual.moradorId,
+      imovelId: dto.imovelId ?? atual.imovelId,
+      tipo: dto.moradorImovelTipoRelacao ?? atual.moradorImovelTipoRelacao,
+      status: dto.moradorImovelStatus ?? atual.moradorImovelStatus,
+      dataFim:
+        dto.moradorImovelDataFim === undefined
+          ? atual.moradorImovelDataFim
+          : dto.moradorImovelDataFim
+            ? new Date(dto.moradorImovelDataFim)
+            : null,
+    };
+    if (this.estaVigente(final.status, final.dataFim)) {
+      await this.garantirCombinacaoPermitida(
+        final.moradorId,
+        final.imovelId,
+        final.tipo,
+        moradorImovelId,
+      );
+    }
+
     try {
       const vinculo = await this.prisma.moradorImovel.update({
         where: { moradorImovelId },
@@ -174,6 +235,59 @@ export class MoradorImovelService {
     });
   }
  
+  // Relação em vigor: ativa e sem data de fim, ou com fim ainda no futuro (ENCERRANDO).
+  private estaVigente(status: number, dataFim: Date | string | null): boolean {
+    if (status !== 1) return false;
+    if (!dataFim) return true;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return new Date(dataFim) > hoje;
+  }
+
+  // Bloqueia, para o mesmo morador e o mesmo imóvel, qualquer soma de tipos que não seja
+  // PROPRIETARIO + MORADOR. Só conta o que está em vigor: o histórico (relações encerradas
+  // ou desativadas) não impede, por exemplo, que um ex-inquilino se torne proprietário.
+  private async garantirCombinacaoPermitida(
+    moradorId: number,
+    imovelId: number,
+    tipo: MoradorImovelTipoRelacao,
+    ignorarId?: number,
+  ) {
+    const outras = await this.prisma.moradorImovel.findMany({
+      where: {
+        moradorId,
+        imovelId,
+        moradorImovelStatus: 1,
+        ...(ignorarId !== undefined ? { moradorImovelId: { not: ignorarId } } : {}),
+      },
+      select: { moradorImovelTipoRelacao: true, moradorImovelDataFim: true },
+    });
+
+    for (const o of outras) {
+      if (!this.estaVigente(1, o.moradorImovelDataFim)) continue;
+      const outro = o.moradorImovelTipoRelacao;
+      if (outro === tipo) continue; // a duplicata exata é barrada pelo índice único (P2002)
+      const permitida = COMBINACAO_PERMITIDA.includes(tipo) && COMBINACAO_PERMITIDA.includes(outro);
+      if (!permitida) {
+        throw new ConflictException(
+          `Este morador já tem uma relação ativa de ${ROTULO_TIPO[outro]} neste imóvel. ` +
+            `A única combinação permitida no mesmo imóvel é Proprietário + Morador; ` +
+            `encerre a relação atual antes de cadastrar ${ROTULO_TIPO[tipo]}.`,
+        );
+      }
+    }
+  }
+
+  // Conta de acesso ativa que o morador já usa em outra relação (se houver).
+  private async usuarioDoMorador(moradorId: number): Promise<number | null> {
+    const existente = await this.prisma.moradorImovel.findFirst({
+      where: { moradorId, usuarioId: { not: null }, usuario: { usuarioStatus: 1 } },
+      orderBy: { moradorImovelId: 'asc' },
+      select: { usuarioId: true },
+    });
+    return existente?.usuarioId ?? null;
+  }
+
   private comEstadoDerivado<T extends { moradorImovelDataFim: Date | null }>(
     vinculo: T,
   ): T & { estado: EstadoRelacao } {

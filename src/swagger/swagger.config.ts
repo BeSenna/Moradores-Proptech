@@ -693,7 +693,7 @@ const paths: Record<string, any> = {
       tag: 'Morador x Imóvel',
       summary: 'Cria o vínculo morador ↔ imóvel',
       description:
-        'Valida que morador e imóvel existem e que `dataFim` não é anterior a `dataInicio`. A combinação (morador, imóvel, tipo de relação) é única.\n\nQuando o tipo é `PROPRIETARIO` ou `INQUILINO`, publica o evento `morador_imovel.vinculado` no RabbitMQ (consumido pelo MS Financeiro).',
+        'Valida que morador e imóvel existem e que `dataFim` não é anterior a `dataInicio`. A combinação (morador, imóvel, tipo de relação) é única.\n\n**Mesma pessoa, mesmo imóvel:** só é permitido somar `PROPRIETARIO` + `MORADOR` (dono que também mora); qualquer outra soma de relações ativas é recusada com 409. Relações encerradas ou inativas não contam.\n\n**Acesso ao portal:** se o morador já tem uma conta ativa em outra relação, a nova relação herda essa mesma conta (`usuarioId`), sem criar outro login.\n\nQuando o tipo é `PROPRIETARIO` ou `INQUILINO`, publica o evento `morador_imovel.vinculado` no RabbitMQ (consumido pelo MS Financeiro).',
       sindico: true,
       requestBody: body('MoradorImovelCreate', {
         moradorId: 7,
@@ -705,6 +705,7 @@ const paths: Record<string, any> = {
       errors: [
         [404, 'Morador #99 não encontrado.'],
         [409, 'Já existe uma relação com esse morador, imóvel e tipo de relação.'],
+        [409, 'Este morador já tem uma relação ativa de Proprietário neste imóvel. A única combinação permitida no mesmo imóvel é Proprietário + Morador; encerre a relação atual antes de cadastrar Inquilino.'],
       ],
     }),
     get: op({
@@ -749,7 +750,7 @@ const paths: Record<string, any> = {
     patch: op({
       tag: 'Morador x Imóvel',
       summary: 'Edita parcialmente uma relação',
-      description: 'Mesmas validações do POST (inclusive `dataFim` ≥ `dataInicio`). Enviar `moradorImovelDataFim: null` reabre a relação (limpa a data de fim).',
+      description: 'Mesmas validações do POST (inclusive `dataFim` ≥ `dataInicio` e a regra de combinação de tipos, aplicada ao estado final da relação). Enviar `moradorImovelDataFim: null` reabre a relação (limpa a data de fim). Uma relação que já tem acesso ao portal não pode ser transferida para outro morador (409).',
       sindico: true,
       parameters: [idParam('relação (morador_imovel_id)', 15)],
       requestBody: body('MoradorImovelUpdate', { moradorImovelTipoRelacao: 'INQUILINO' }),
@@ -757,6 +758,8 @@ const paths: Record<string, any> = {
       errors: [
         [404, 'Relação #99 não encontrada.'],
         [409, 'morador_imovel_data_fim não pode ser anterior à data_inicio.'],
+        [409, 'Este morador já tem uma relação ativa de Proprietário neste imóvel. A única combinação permitida no mesmo imóvel é Proprietário + Morador; encerre a relação atual antes de cadastrar Inquilino.'],
+        [409, 'Esta relação tem acesso ao portal e não pode ser transferida para outro morador. Crie uma nova relação.'],
       ],
     }),
     delete: op({

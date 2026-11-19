@@ -117,6 +117,113 @@ describe('MoradorImovelService', () => {
       expect(data.moradorImovelDataInicio).toBeInstanceOf(Date);
       expect(data.moradorImovelStatus).toBe(1);
     });
+
+    describe('login herdado entre as relações da mesma pessoa', () => {
+      it('herda a conta ativa que o morador já usa em outra relação', async () => {
+        prisma.moradorImovel.findFirst.mockResolvedValue({ usuarioId: 42 });
+        prisma.moradorImovel.create.mockResolvedValue(vinculo({ usuarioId: 42 }));
+
+        await service.create(dto);
+
+        expect(prisma.moradorImovel.findFirst.mock.calls[0][0].where).toEqual({
+          moradorId: 7,
+          usuarioId: { not: null },
+          usuario: { usuarioStatus: 1 },
+        });
+        expect(prisma.moradorImovel.create.mock.calls[0][0].data.usuarioId).toBe(42);
+      });
+
+      it('não envia usuarioId quando o morador ainda não tem conta ativa', async () => {
+        prisma.moradorImovel.findFirst.mockResolvedValue(null);
+        prisma.moradorImovel.create.mockResolvedValue(vinculo());
+
+        await service.create(dto);
+
+        expect(prisma.moradorImovel.create.mock.calls[0][0].data).not.toHaveProperty('usuarioId');
+      });
+    });
+
+    describe('combinação de tipos no mesmo imóvel', () => {
+      const existente = (tipo: string, dataFim: Date | null = null) => [
+        { moradorImovelTipoRelacao: tipo, moradorImovelDataFim: dataFim },
+      ];
+
+      it.each([
+        ['PROPRIETARIO', 'MORADOR'],
+        ['MORADOR', 'PROPRIETARIO'],
+      ])('permite %s já existente + %s novo (dono que também mora)', async (atual, novo) => {
+        prisma.moradorImovel.findMany.mockResolvedValue(existente(atual));
+        prisma.moradorImovel.create.mockResolvedValue(vinculo({ moradorImovelTipoRelacao: novo }));
+
+        await service.create({ ...dto, moradorImovelTipoRelacao: novo });
+
+        expect(prisma.moradorImovel.create).toHaveBeenCalled();
+      });
+
+      it.each([
+        ['PROPRIETARIO', 'INQUILINO'],
+        ['INQUILINO', 'PROPRIETARIO'],
+        ['PROPRIETARIO', 'TEMPORADA'],
+        ['TEMPORADA', 'PROPRIETARIO'],
+        ['INQUILINO', 'MORADOR'],
+        ['MORADOR', 'INQUILINO'],
+        ['MORADOR', 'TEMPORADA'],
+        ['TEMPORADA', 'MORADOR'],
+        ['INQUILINO', 'TEMPORADA'],
+        ['TEMPORADA', 'INQUILINO'],
+      ])('409 para %s já existente + %s novo', async (atual, novo) => {
+        prisma.moradorImovel.findMany.mockResolvedValue(existente(atual));
+
+        await expect(
+          service.create({ ...dto, moradorImovelTipoRelacao: novo }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(prisma.moradorImovel.create).not.toHaveBeenCalled();
+        expect(events.publish).not.toHaveBeenCalled();
+      });
+
+      it('a mensagem de erro diz qual é a única combinação permitida', async () => {
+        prisma.moradorImovel.findMany.mockResolvedValue(existente('PROPRIETARIO'));
+
+        await expect(
+          service.create({ ...dto, moradorImovelTipoRelacao: 'INQUILINO' }),
+        ).rejects.toThrow(/Proprietário \+ Morador/);
+      });
+
+      it('só olha relações ativas do mesmo morador e do mesmo imóvel', async () => {
+        prisma.moradorImovel.create.mockResolvedValue(vinculo());
+
+        await service.create(dto);
+
+        expect(prisma.moradorImovel.findMany.mock.calls[0][0].where).toEqual({
+          moradorId: 7,
+          imovelId: 3,
+          moradorImovelStatus: 1,
+        });
+      });
+
+      it('ignora relação já encerrada (o histórico não impede um novo tipo)', async () => {
+        prisma.moradorImovel.findMany.mockResolvedValue(existente('INQUILINO', new Date('2025-06-10')));
+        prisma.moradorImovel.create.mockResolvedValue(vinculo());
+
+        await service.create(dto);
+
+        expect(prisma.moradorImovel.create).toHaveBeenCalled();
+      });
+
+      it('relação que ainda está ENCERRANDO (fim no futuro) continua valendo', async () => {
+        prisma.moradorImovel.findMany.mockResolvedValue(existente('INQUILINO', new Date('2026-12-31')));
+
+        await expect(service.create(dto)).rejects.toBeInstanceOf(ConflictException);
+      });
+
+      it('não valida quando a nova relação já nasce inativa', async () => {
+        prisma.moradorImovel.create.mockResolvedValue(vinculo({ moradorImovelStatus: 0 }));
+
+        await service.create({ ...dto, moradorImovelStatus: 0 });
+
+        expect(prisma.moradorImovel.findMany).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('encerrar', () => {
@@ -176,6 +283,84 @@ describe('MoradorImovelService', () => {
       await service.update(15, { moradorImovelStatus: 1 });
 
       expect(prisma.moradorImovel.update.mock.calls[0][0].data.moradorImovelDataFim).toBeUndefined();
+    });
+  });
+
+  describe('update — combinação de tipos e troca de morador', () => {
+    const outraAtiva = (tipo: string) => [{ moradorImovelTipoRelacao: tipo, moradorImovelDataFim: null }];
+
+    it('409 ao trocar o tipo para um que não combina com outra relação ativa do imóvel', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo({ moradorImovelTipoRelacao: 'MORADOR' }));
+      prisma.moradorImovel.findMany.mockResolvedValue(outraAtiva('PROPRIETARIO'));
+
+      await expect(
+        service.update(15, { moradorImovelTipoRelacao: 'INQUILINO' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.moradorImovel.update).not.toHaveBeenCalled();
+    });
+
+    it('não conta a própria relação ao validar', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo());
+      prisma.moradorImovel.update.mockResolvedValue(vinculo());
+
+      await service.update(15, { moradorImovelDataInicio: '2021-04-01' });
+
+      expect(prisma.moradorImovel.findMany.mock.calls[0][0].where).toEqual({
+        moradorId: 7,
+        imovelId: 3,
+        moradorImovelStatus: 1,
+        moradorImovelId: { not: 15 },
+      });
+    });
+
+    it('permite trocar para MORADOR quando a outra relação ativa é PROPRIETARIO', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo({ moradorImovelTipoRelacao: 'INQUILINO' }));
+      prisma.moradorImovel.findMany.mockResolvedValue(outraAtiva('PROPRIETARIO'));
+      prisma.moradorImovel.update.mockResolvedValue(vinculo({ moradorImovelTipoRelacao: 'MORADOR' }));
+
+      await service.update(15, { moradorImovelTipoRelacao: 'MORADOR' });
+
+      expect(prisma.moradorImovel.update).toHaveBeenCalled();
+    });
+
+    it('reabrir uma relação encerrada também revalida a combinação', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(
+        vinculo({ moradorImovelTipoRelacao: 'INQUILINO', moradorImovelDataFim: new Date('2026-01-10') }),
+      );
+      prisma.moradorImovel.findMany.mockResolvedValue(outraAtiva('PROPRIETARIO'));
+
+      await expect(service.update(15, { moradorImovelDataFim: null })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('editar uma relação já encerrada não é bloqueado', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(
+        vinculo({ moradorImovelTipoRelacao: 'INQUILINO', moradorImovelDataFim: new Date('2026-01-10') }),
+      );
+      prisma.moradorImovel.update.mockResolvedValue(vinculo());
+
+      await service.update(15, { moradorImovelDataInicio: '2021-04-01' });
+
+      expect(prisma.moradorImovel.findMany).not.toHaveBeenCalled();
+    });
+
+    it('409 ao transferir para outro morador uma relação que já tem login', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo({ usuarioId: 42 }));
+      prisma.morador.findUnique.mockResolvedValue({ moradorId: 8 });
+
+      await expect(service.update(15, { moradorId: 8 })).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.moradorImovel.update).not.toHaveBeenCalled();
+    });
+
+    it('permite transferir para outro morador uma relação sem login', async () => {
+      prisma.moradorImovel.findUnique.mockResolvedValue(vinculo());
+      prisma.morador.findUnique.mockResolvedValue({ moradorId: 8 });
+      prisma.moradorImovel.update.mockResolvedValue(vinculo({ moradorId: 8 }));
+
+      await service.update(15, { moradorId: 8 });
+
+      expect(prisma.moradorImovel.update).toHaveBeenCalled();
     });
   });
 });
