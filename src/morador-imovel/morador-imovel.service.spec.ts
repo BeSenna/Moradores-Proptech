@@ -363,4 +363,75 @@ describe('MoradorImovelService', () => {
       expect(prisma.moradorImovel.update).toHaveBeenCalled();
     });
   });
+
+  describe('sincronizarAcessos — relações antigas herdam o login da pessoa', () => {
+    it('liga a conta única do morador às relações ativas que estão sem login', async () => {
+      prisma.moradorImovel.findMany.mockResolvedValue([
+        { moradorId: 7, usuarioId: 42 },
+        { moradorId: 8, usuarioId: 50 },
+      ]);
+      prisma.moradorImovel.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 2 });
+
+      const n = await service.sincronizarAcessos();
+
+      expect(n).toBe(3);
+      expect(prisma.moradorImovel.updateMany).toHaveBeenCalledWith({
+        where: { moradorId: 7, usuarioId: null, moradorImovelStatus: 1 },
+        data: { usuarioId: 42 },
+      });
+      expect(prisma.moradorImovel.updateMany).toHaveBeenCalledWith({
+        where: { moradorId: 8, usuarioId: null, moradorImovelStatus: 1 },
+        data: { usuarioId: 50 },
+      });
+    });
+
+    it('só considera contas ativas', async () => {
+      prisma.moradorImovel.findMany.mockResolvedValue([]);
+
+      await service.sincronizarAcessos();
+
+      expect(prisma.moradorImovel.findMany.mock.calls[0][0].where).toEqual({
+        usuarioId: { not: null },
+        usuario: { usuarioStatus: 1 },
+      });
+    });
+
+    it('não mexe em morador com mais de uma conta ativa (ambíguo)', async () => {
+      prisma.moradorImovel.findMany.mockResolvedValue([
+        { moradorId: 7, usuarioId: 42 },
+        { moradorId: 7, usuarioId: 43 },
+      ]);
+
+      expect(await service.sincronizarAcessos()).toBe(0);
+      expect(prisma.moradorImovel.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('sem nenhuma conta, não há o que sincronizar', async () => {
+      prisma.moradorImovel.findMany.mockResolvedValue([]);
+
+      expect(await service.sincronizarAcessos()).toBe(0);
+      expect(prisma.moradorImovel.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('é idempotente: sem relações sem login, devolve 0', async () => {
+      prisma.moradorImovel.findMany.mockResolvedValue([{ moradorId: 7, usuarioId: 42 }]);
+      prisma.moradorImovel.updateMany.mockResolvedValue({ count: 0 });
+
+      expect(await service.sincronizarAcessos()).toBe(0);
+    });
+
+    it('na subida do serviço roda a sincronização', async () => {
+      const spy = jest.spyOn(service, 'sincronizarAcessos').mockResolvedValue(2);
+
+      await service.onApplicationBootstrap();
+
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it('erro na sincronização nunca derruba a subida do serviço', async () => {
+      jest.spyOn(service, 'sincronizarAcessos').mockRejectedValue(new Error('banco fora do ar'));
+
+      await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
+    });
+  });
 });

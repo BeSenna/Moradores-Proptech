@@ -7,6 +7,7 @@ const model = () => ({
   count: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
+  updateMany: jest.fn(),
 });
 
 export function createPrismaMock() {

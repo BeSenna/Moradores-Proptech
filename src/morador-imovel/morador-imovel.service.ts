@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { MoradorImovelTipoRelacao, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
@@ -24,12 +24,57 @@ const ROTULO_TIPO: Record<MoradorImovelTipoRelacao, string> = {
 };
  
 @Injectable()
-export class MoradorImovelService {
+export class MoradorImovelService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(MoradorImovelService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
   ) {}
  
+  // Na subida do serviço, relações antigas (criadas antes de o login ser herdado entre as relações da
+  // mesma pessoa) recebem a conta do morador. É idempotente: sem nada a ajustar, não altera nada.
+  // Falha aqui nunca derruba o serviço.
+  async onApplicationBootstrap() {
+    try {
+      const n = await this.sincronizarAcessos();
+      if (n > 0) this.logger.log(`Acesso herdado em ${n} relação(ões) sem login | regra=login único por pessoa`);
+    } catch (e) {
+      this.logger.warn(`Não foi possível sincronizar o acesso das relações antigas: ${(e as Error).message}`);
+    }
+  }
+
+  // Mesma regra do create(): o acesso é da pessoa. Relações ativas sem login ficam com a conta ativa que o
+  // morador já usa em outra relação. Se o morador tem mais de uma conta ativa, é ambíguo e nada é alterado.
+  // Devolve quantas relações foram atualizadas.
+  async sincronizarAcessos(): Promise<number> {
+    const comConta = await this.prisma.moradorImovel.findMany({
+      where: { usuarioId: { not: null }, usuario: { usuarioStatus: 1 } },
+      select: { moradorId: true, usuarioId: true },
+      distinct: ['moradorId', 'usuarioId'],
+    });
+
+    const contasPorMorador = new Map<number, Set<number>>();
+    for (const r of comConta) {
+      if (r.usuarioId === null) continue;
+      const contas = contasPorMorador.get(r.moradorId) ?? new Set<number>();
+      contas.add(r.usuarioId);
+      contasPorMorador.set(r.moradorId, contas);
+    }
+
+    let atualizadas = 0;
+    for (const [moradorId, contas] of contasPorMorador) {
+      if (contas.size !== 1) continue;
+      const [usuarioId] = contas;
+      const r = await this.prisma.moradorImovel.updateMany({
+        where: { moradorId, usuarioId: null, moradorImovelStatus: 1 },
+        data: { usuarioId },
+      });
+      atualizadas += r.count;
+    }
+    return atualizadas;
+  }
+
   async create(dto: CreateMoradorImovelDto) {
     await this.garantirMoradorExiste(dto.moradorId!);
     await this.garantirImovelExiste(dto.imovelId!);

@@ -652,17 +652,11 @@ Resposta `401 Unauthorized` (login ou senha errados): `{ "message": "Login ou se
 > imóvel, crie duas relações (`PROPRIETARIO` e `MORADOR`); a segunda herda o login da
 > primeira. Outras somas no mesmo imóvel retornam `409`.
 >
-> **Dados anteriores a esta regra:** relações antigas de quem já tinha login não herdam
-> a conta retroativamente. Se necessário, rode uma vez no banco (confira antes com `SELECT`):
-> ```sql
-> UPDATE morador_imovel mi
-> JOIN (SELECT morador_id, MIN(usuario_id) AS usuario_id
->       FROM morador_imovel WHERE usuario_id IS NOT NULL
->       GROUP BY morador_id HAVING COUNT(DISTINCT usuario_id) = 1) x
->   ON x.morador_id = mi.morador_id
-> SET mi.usuario_id = x.usuario_id
-> WHERE mi.usuario_id IS NULL AND mi.morador_imovel_status = 1;
-> ```
+> **Relações antigas:** ao iniciar, o serviço liga a conta do morador às relações ativas dele
+> que ainda estão sem login (criadas antes dessa regra). Só age quando o morador tem uma única
+> conta ativa, e não altera nada se não houver o que ajustar. O ajuste aparece no log como
+> `Acesso herdado em N relação(ões) sem login`.
+>
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
